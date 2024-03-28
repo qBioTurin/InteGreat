@@ -4,8 +4,8 @@
 Sys.setenv("DATAVERSE_SERVER" = "dataverse.harvard.edu")
 APIkey_path = system.file("Data",".APIkey", package = "ORCA")
 
-source(system.file("Shiny","AuxFunctions.R", package = "ORCA"))
-# source("./inst/Shiny/AuxFunctions.R")
+#source(system.file("Shiny","AuxFunctions.R", package = "ORCA"))
+source("./inst/Shiny/AuxFunctions.R")
 
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
@@ -281,6 +281,8 @@ server <- function(input, output, session) {
       paste('WBanalysis-', Sys.Date(), '.zip', sep='')
     },
     content = function(file) {
+      manageSpinner(TRUE)
+      
       tempDir <- tempdir()
       
       nomeRDS <- paste0("WBquant_analysis-", Sys.Date(), ".rds")
@@ -294,7 +296,8 @@ server <- function(input, output, session) {
       saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "WB")
       
       zip(file, files = c(tempRdsPath, tempXlsxPath), flags = "-j")
-    }
+      manageSpinner(FALSE)
+    },
   )
   
   observeEvent(input$actionButton_ResetPlanes,{
@@ -467,6 +470,122 @@ server <- function(input, output, session) {
     }  
   })
   
+  observeEvent(c(input$actionButton_TruncV,input$actionButton_TruncH),{
+    
+    if( !is.null(wbResult$PanelsValue))
+    {
+      Flags$IDlane -> IDlane
+      if(!is.null(wbResult$TruncatedPanelsValue ))
+      {
+        pl <- wbResult$TruncatedPlots    
+        wbResult$TruncatedPanelsValue -> PanelsValue
+      }
+      else{
+        wbResult$PanelsValue -> PanelsValue
+        pl<-wbResult$Plots
+      }
+      
+      maxPanelsValue=max(wbResult$PanelsValue$Values)
+      wbResult$AUCdf -> AUCdf
+      AUCdf.new <- AUCdf[length(AUCdf$Truncation),]
+      #AUCdf.new$ExpName = "-"
+      lastTrunc = AUCdf %>% 
+        group_by(SampleName) %>%
+        filter(SampleName == IDlane, row_number()==n() ) %>%
+        ungroup() %>%
+        dplyr::select(Truncation) 
+      
+      if(length(lastTrunc$Truncation) > 0 & lastTrunc$Truncation != "-")
+        AUCdf.new$Truncation <- lastTrunc$Truncation
+      
+      AUCdf.new$SampleName <- IDlane
+      
+      if(Flags$CutTab=="V")
+      {
+        MinTrunc<-input$truncV[1]
+        MaxTrunc<-input$truncV[2]
+        AUCdf.new$Truncation <- paste(AUCdf.new$Truncation ,";\n X = [", MinTrunc," ; ", MaxTrunc ,"]",collapse = "")
+        PanelsValue<- PanelsValue[!((PanelsValue$Y < MinTrunc | PanelsValue$Y > MaxTrunc) & PanelsValue$ID == IDlane),]
+        PanelsValue$Values[PanelsValue$ID == IDlane] <- PanelsValue$Values[PanelsValue$ID == IDlane] -min(PanelsValue$Values[PanelsValue$ID == IDlane]) 
+        # pl <- ggplot(PanelsValue, aes(x =Y,y=Values)) +
+        #   geom_line() + theme_bw() +
+        #   facet_wrap(~ID)
+        updateSliderInput(session,"truncV",
+                          min = min(PanelsValue$Y[PanelsValue$ID == IDlane]),
+                          max = max(PanelsValue$Y[PanelsValue$ID == IDlane]),
+                          value = c(min(PanelsValue$Y[PanelsValue$ID == IDlane]),
+                                    max(PanelsValue$Y[PanelsValue$ID == IDlane]) ) )
+      }
+      else if(Flags$CutTab=="H")
+      {
+        TruncY<-input$truncH[1]
+        PanelsValue <- PanelsValue[!(PanelsValue$Values<TruncY & PanelsValue$ID == IDlane),]
+        PanelsValue$Values[PanelsValue$ID == IDlane] <- PanelsValue$Values[PanelsValue$ID == IDlane] - TruncY
+        AUCdf.new$Truncation <- paste(AUCdf.new$Truncation ,";\n Y = ", TruncY)
+        # pl <- ggplot(PanelsValue, aes(x =Y,y=Values)) +
+        #   geom_line() + 
+        #   theme_bw() +
+        #   facet_wrap(~ID)+ 
+        #   lims(y=c(minPanelsValue,maxPanelsValue))
+        
+        updateSliderInput(session,"truncH",
+                          min = min(PanelsValue$Values[PanelsValue$ID == IDlane]),
+                          max = max(PanelsValue$Values[PanelsValue$ID == IDlane]),
+                          value = c(min(PanelsValue$Values[PanelsValue$ID == IDlane]),
+                                    max(PanelsValue$Values[PanelsValue$ID == IDlane]) ) )
+      }
+      
+      pl <- ggplot(PanelsValue, aes(x =Y,y=Values)) +
+        geom_line() + 
+        theme_bw() +
+        facet_wrap(~ID)+ 
+        lims(y=c(0,maxPanelsValue))
+      
+      wbResult$TruncatedPanelsValue <- PanelsValue
+      wbResult$TruncatedPlots <- pl
+      output$DataPlot <- renderPlot({pl})
+      AUCdf<-AUCfunction(AUCdf.new=AUCdf.new,wbResult$AUCdf,PanelsValue,SName = IDlane)
+      
+      output$AUC <- renderDT({
+        AUCdf  %>% 
+          dplyr::select(SampleName,Truncation, AUC) 
+      },
+      selection = 'none', 
+      rownames= FALSE
+      # editable = list(target = "cell", 
+      #                 disable = list(columns = 1:4))
+      )
+      wbResult$AUCdf <- AUCdf
+    }
+  })
+  
+  ## next buttons
+  observeEvent(input$NextWBQuantif,{
+    if(!is.null(wbResult$AUCdf))
+      wbquantResult$WBanalysis = reactiveValuesToList(wbResult)
+    
+    updateTabsetPanel(session, "SideTabs",
+                      selected = "quantification")
+  })
+  
+  ## quantification WB
+  wbquantResult = reactiveValues(NormWBanalysis = NULL,
+                                 NormWBanalysis_filtered = NULL,
+                                 WBanalysis = NULL,
+                                 WBanalysis_filtered = NULL,
+                                 RelDensitiy = NULL,
+                                 AdjRelDensitiy = NULL
+  )
+  wbquantResult0 = list(NormWBanalysis = NULL,
+                        NormWBanalysis_filtered = NULL,
+                        WBanalysis = NULL,
+                        WBanalysis_filtered = NULL,
+                        RelDensitiy = NULL,
+                        AdjRelDensitiy = NULL
+  )
+  FlagsWBquant = reactiveValues(BothUploaded = F)
+  
+  
   observeEvent(input$DataverseUpload_Button,{
     
     if(input$selectAnalysis_DV != ""){
@@ -529,5 +648,254 @@ server <- function(input, output, session) {
                                  RelDensitiy = NULL,
                                  AdjRelDensitiy = NULL
   )
+  
+  observeEvent(input$actionB_loadingNormWB, {
+    mess = readfile(
+      filename = input$NormWBImport$datapath,
+      type = "RDs",
+      namesAll = namesAll
+    )
+    
+    if(is.list(mess) && !is.null(mess$message)) {
+      showAlert("Error", mess[["message"]], "error", 5000)
+      return() 
+    }
+    
+    validate(
+      need(!setequal(names(mess),c("message","call")) ,
+           mess[["message"]])
+    )
+    
+    choices = paste0(mess$AUCdf$SampleName, " with ", mess$AUCdf$Truncation)
+    wbquantResult$NormWBanalysis = mess
+    showAlert("Success", "The RDS has been uploaded with success", "success", 2000)
+  })
+  
+  observeEvent(input$actionB_loadingWB,{
+    mess = readfile(
+        filename = input$WBImport$datapath,
+        type = "RDs",
+        namesAll = namesAll
+      )
+      
+    if(is.list(mess) && !is.null(mess$message)) {
+      showAlert("Error", mess[["message"]], "error", 5000)
+      return() 
+    }
+    
+    validate(
+      need(!setequal(names(mess),c("message","call")) ,
+           mess[["message"]])
+    )
+    
+    wbquantResult$WBanalysis = mess
+    wbquantResult$WBanalysis_filtered = NULL
+    showAlert("Success", "The RDS has been uploaded with success", "success", 2000)
+})
+  
+  observe({
+    if(!is.null(wbquantResult$WBanalysis) & !is.null(wbquantResult$NormWBanalysis))
+      FlagsWBquant$BothUploaded = T
+  })
+  
+  observe({
+    if(is.null(wbquantResult$NormWBanalysis)){
+      table = wbResult0$AUCdf
+    }else{
+      table = wbquantResult$NormWBanalysis$AUCdf
+    }
+    output$AUC_WBnorm <- renderDT(
+      table , 
+      #filter = 'top', server = FALSE, 
+      selection = "multiple", 
+      # editable = list(target = "cell", 
+      #                 disable = list(columns = 1:3)),
+      options = list(lengthChange = FALSE, autoWidth = TRUE),
+      rownames= FALSE
+    )
+  })
+  
+  observe({
+    if(is.null(wbquantResult$WBanalysis)){
+      table = wbResult0$AUCdf
+    }else{
+      table = wbquantResult$WBanalysis$AUCdf
+    }
+    output$AUC_WB <- renderDT(
+      table,
+      #filter = 'top', server = FALSE, 
+      selection = "multiple", 
+      # editable = list(target = "cell", 
+      #                 disable = list(columns = 1:3)),
+      options = list(lengthChange = FALSE, autoWidth = TRUE),
+      rownames= FALSE
+    )
+  })
+  
+  # selecting rows
+  observeEvent(input$AUC_WB_rows_selected,{
+    if(!is.null(wbquantResult$WBanalysis) ){
+      indexesWB = input$AUC_WB_rows_selected
+      AUCdf = wbquantResult$WBanalysis$AUCdf
+      
+      if(length(indexesWB) > 0){
+        wbquantResult$WBanalysis_filtered = AUCdf[indexesWB,]
+      }else{
+        wbquantResult$WBanalysis_filtered = AUCdf
+      }
+    }
+  })
+  observeEvent(input$AUC_WBnorm_rows_selected,{
+    if(!is.null(wbquantResult$NormWBanalysis)){
+      indexesWB = input$AUC_WBnorm_rows_selected
+      AUCdf = wbquantResult$NormWBanalysis$AUCdf
+      
+      if(length(indexesWB) > 0){
+        wbquantResult$NormWBanalysis_filtered = AUCdf[indexesWB,]
+        
+        choices = paste0( AUCdf[indexesWB,]$SampleName, "; truncated ", AUCdf[indexesWB,]$Truncation)
+        selected = input$IdLaneNorm_RelDens
+        updateSelectInput("IdLaneNorm_RelDens",
+                          session = session,
+                          choices = choices,
+                          selected = selected)
+      }else{
+        wbquantResult$NormWBanalysis_filtered = AUCdf
+      }
+    }
+  })
+  
+  # the relative density and adjusted is calculated
+  observeEvent(list(FlagsWBquant$BothUploaded, input$IdLaneNorm_RelDens,input$AUC_WB_rows_selected,input$AUC_WBnorm_rows_selected),{
+    table =  wbResult0$AUCdf 
+    
+    if(!is.null(wbquantResult$WBanalysis_filtered) & !is.null(wbquantResult$NormWBanalysis_filtered)){
+      IdLaneNorm_RelDens = input$IdLaneNorm_RelDens
+      IdLaneNorm_RelDens = strsplit(IdLaneNorm_RelDens,
+                                    split = "; truncated ")[[1]]
+      
+      tbWBnorm = wbquantResult$NormWBanalysis_filtered %>%
+        filter(SampleName ==IdLaneNorm_RelDens[1],
+               Truncation == IdLaneNorm_RelDens[2]) %>%
+        rename(AUC_Norm = AUC,
+               Truncation_Norm = Truncation,
+               SampleName_Norm = SampleName)
+      
+      tbWB = wbquantResult$WBanalysis_filtered
+      
+      if(!is.null(tbWBnorm) & !is.null(tbWB) & dim(tbWBnorm)[1]==1 ){
+        if(!all(table(tbWB$SampleName)==1) ){
+          output$LoadingErrorWB <- renderText({"No rows with equal sample name are allowed"})
+        }
+        else{ # we admit only one SampleName
+          table = tbWB
+          table$AUC_Norm = tbWBnorm$AUC_Norm
+          table$RelDens = table$AUC/table$AUC_Norm
+          table = table %>%
+            dplyr::select(SampleName, Truncation, AUC, AUC_Norm, RelDens) 
+        }
+      }
+    }
+    
+    wbquantResult$RelDensitiy = table
+    
+    output$AUC_RelDens <- renderDT(
+      table,
+      filter = 'top',
+      server = FALSE,
+      options = list(lengthChange = FALSE, autoWidth = TRUE),
+      rownames= FALSE
+    )
+    
+  })
+  
+  observeEvent(list(FlagsWBquant$BothUploaded, input$AUC_WB_rows_selected,input$AUC_WBnorm_rows_selected),{
+    table = data.frame(SampleName = "-",
+                       Truncation = "-", 
+                       Truncation_Norm = "-",
+                       AUC = "-", 
+                       AUC_Norm = "-",
+                       AdjRelDens = "-")
+    
+    if(!is.null(wbquantResult$WBanalysis_filtered) & !is.null(wbquantResult$NormWBanalysis_filtered)){
+      
+      tbWB = wbquantResult$WBanalysis_filtered
+      tbWBnorm = wbquantResult$NormWBanalysis_filtered
+      
+      if(!all(table(tbWBnorm$SampleName)==1) ){
+        output$LoadingErrorNormWB <- renderText({"No rows with equal sample name are allowed"})
+      }else if(!all(table(tbWB$SampleName)==1) ){
+        output$LoadingErrorWB <- renderText({"No rows with equal sample name are allowed"})
+      }
+      else{ # we admit only one SampleName
+        
+        tbWBnorm = tbWBnorm  %>%
+          rename(AUC_Norm = AUC,
+                 Truncation_Norm = Truncation)
+        
+        table = merge(tbWBnorm,tbWB, by = "SampleName" ,all = T )
+        
+        table$AdjRelDens = table$AUC/table$AUC_Norm
+        table = table %>% 
+          dplyr::select( SampleName, Truncation, Truncation_Norm, AUC, AUC_Norm, AdjRelDens) 
+        
+        wbquantResult$AdjRelDensitiy = table
+        output$AUC_AdjRelDens <- renderDT(
+          table ,
+          server = FALSE,
+          options = list(lengthChange = FALSE, autoWidth = TRUE),
+          rownames= FALSE
+        )
+        
+        if(dim(table)[1] > 1 ){
+          barPlotAdjRelDens = table %>% 
+            mutate(Normalizer = paste0("Sample: ",SampleName ),
+                   WB = paste0("Sample: ",SampleName))  %>%
+            ggplot() +
+            geom_bar(aes(x = SampleName,
+                         y = AdjRelDens,
+                         fill = Normalizer ),
+                     stat = "identity" ) +
+            #facet_grid(~WB)+
+            theme_bw()
+        }else{
+          barPlotAdjRelDens = ggplot()
+        }
+        output$plot_AdjRelDens <- renderPlot({
+          barPlotAdjRelDens
+        })
+      }
+    }
+  })
+  
+  output$downloadWBquantAnalysis <- downloadHandler(
+    filename = function() {
+      paste0('WBquantanalysis-', Sys.Date(), '.zip')
+    },
+    content = function(file) {
+      manageSpinner(TRUE)
+      
+      tempDir <- tempdir()
+      tempRDSPath <- file.path(tempDir, paste0("Analysis-", Sys.Date(), ".rds"))
+      tempExcelPath <- file.path(tempDir, paste0("Analysis-", Sys.Date(), ".xlsx"))
+      
+      resultsRDS <- DataAnalysisModule$wbquantResult
+      saveRDS(resultsRDS, tempRDSPath)
+      
+      resultsExcel <- DataAnalysisModule$wbquantResult
+      saveExcel(filename = tempExcelPath, ResultList=resultsExcel, analysis = "WB comparison")
+      
+      zip(file, files = c(tempRDSPath, tempExcelPath), flags = "-j")
+      manageSpinner(FALSE)
+    }
+  )
+  
+  toListenWBquant <- reactive({
+    reactiveValuesToList(wbquantResult)
+  })
+  observeEvent(toListenWBquant(),{
+    DataAnalysisModule$wbquantResult = reactiveValuesToList(wbquantResult)
+  })
+  
 }
 

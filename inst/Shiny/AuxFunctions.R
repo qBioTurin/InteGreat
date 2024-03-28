@@ -3,6 +3,14 @@ showAlert <- function(title, text, type = "info", time) {
   shinyalert(title = title, text = text, type = type, timer = time)
 }
 
+manageSpinner <- function(isDownloading) {
+  if(isDownloading == TRUE) {
+    show_modal_spinner()
+  } else {
+    remove_modal_spinner()
+  }
+}
+
 # function called when you need to read a file
 readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = namesAll, allDouble = FALSE, colors = FALSE) {
   out <- tryCatch({
@@ -15,10 +23,22 @@ readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = 
       else {loadImage(filename)}
     },
     "RDs" = {
+      if(is.null(filename) || !file.exists(filename)) {
+        return(list(message = "Please, select a RDS File!", call = ""))
+      }  else if(tolower(tools::file_ext(filename)) != "rds") {
+        return(list(message = "Please, upload a file with a .rds extension.", call = ""))
+      } 
+      
       x = readRDS(filename)
-      if (!all(names(x) %in% namesAll)) {
+      
+      if(!all(names(x) %in% namesAll)) {
         return(list(message = "The RDs file must be generated from Data Analysis module.", call = ""))
       }
+      
+      if(is.null(x$AUCdf)) {
+        return(list(message = "The WB analysis must contain the AUC table", call = ""))
+      }
+      
       x
     },
     "RDsMulti" = {
@@ -163,7 +183,7 @@ saveExcel <- function(filename, ResultList, analysis) {
     plot(c(1,dim(im)[2]),c(1,dim(im)[1]), type='n',ann=FALSE)
     rasterImage(im,1,1,dim(im)[2],dim(im)[1])
     insertPlot(wb = wb,  sheet="WBimage")
-    
+
     addWorksheet(wb,"Plot")
     print(ResultList[["Plots"]])
     insertPlot(wb = wb,  sheet="Plot")
@@ -175,7 +195,41 @@ saveExcel <- function(filename, ResultList, analysis) {
     addWorksheet(wb,"AUC")
     finaldata = ResultList[["AUCdf"]]
     writeDataTable(wb,finaldata, sheet="AUC")
-  }
+  } else if(analysis =="WB comparison"){
+    ## Create a new workbook
+    wb <- createWorkbook("WB comparison")
+    
+    ## initial data
+    addWorksheet(wb,"Normalizer WB")
+    writeDataTable(wb, sheet = "Normalizer WB", ResultList[["NormWBanalysis_filtered"]])
+    
+    addWorksheet(wb,"WB")
+    writeDataTable(wb, sheet = "WB", ResultList[["WBanalysis_filtered"]])
+    
+    ### Analysis
+    
+    addWorksheet(wb,"RelDensitiy")
+    writeDataTable(wb, sheet = "RelDensitiy", ResultList[["RelDensitiy"]])
+    
+    addWorksheet(wb,"AdjRelDensitiy")
+    writeDataTable(wb, sheet = "AdjRelDensitiy", ResultList[["AdjRelDensitiy"]])
+    
+    addWorksheet(wb,"Barplot AdjRelDensitiy")
+    if(!is.null( ResultList[["AdjRelDensitiy"]])){
+      print(
+        ResultList[["AdjRelDensitiy"]] %>% 
+          mutate(Normalizer = paste0("Sample: ",SampleName ),
+                 WB = paste0("Sample: ",SampleName))  %>%
+          ggplot() +
+          geom_bar(aes(x = SampleName,
+                       y = AdjRelDens,
+                       fill = Normalizer ),
+                   stat = "identity" ) +
+          theme_bw()
+      )
+    }
+    insertPlot(wb, sheet = "Barplot AdjRelDensitiy")
+  } 
   
   saveWorkbook(wb, filename)
   return(1)

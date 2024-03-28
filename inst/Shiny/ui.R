@@ -1,6 +1,7 @@
 library(shinydashboard)
 library(shiny)
 library(shinyalert)
+library(shinybusy)
 library(zoo)
 library(knitr)
 library(ggplot2)
@@ -13,7 +14,7 @@ library(openxlsx)
 library(patchwork)
 
 ui <- dashboardPage(
-  dashboardHeader(title = "ORCA",
+    dashboardHeader(title = "ORCA",
                   tags$li(a(onclick = "window.open('https://github.com/qBioTurin/ORCA')",
                             href = NULL,
                             icon("github"),
@@ -307,15 +308,11 @@ ui <- dashboardPage(
                    ),
                    plotOutput("plot_AdjRelDens"),
                    fluidRow(
-                     column(width = 1, offset = 7,
-                            downloadButton( label = "Download the analysis", 
-                                            outputId = "downloadButton_WBquant",
-                                            icon = icon("download") 
-                            )
-                     ),
                      column(width = 1,offset = 9,
-                            downloadButton( label = "Download xlsx", 
-                                            outputId = "downloadButtonExcel_WBquant",
+                            downloadButton( label = "Download Analysis & Excel", 
+                                            outputId = "downloadWBquantAnalysis",
+                                            #href = "Results.RData",
+                                            #download = "Results.RData",
                                             icon = icon("download") )
                      )
                    )
