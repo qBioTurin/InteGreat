@@ -77,6 +77,19 @@ server <- function(input, output, session) {
     file <- !is.null(input$imImport) && file.exists(input$imImport$datapath)
     mess = readfile(filename = input$imImport$datapath, type = "tif", file)
     
+    if( !is.null(wbResult$Im) ) { 
+      showModal(modalDialog(
+          title = "Important message",
+          "Do you want to update the WB data already present, by resetting the previous analysis?",
+          easyClose = TRUE,
+          footer= tagList(actionButton("confirmUpload", "Update"),
+                          modalButton("Cancel")
+          )
+        )
+      )
+      return()
+    }
+    
     if(setequal(names(mess), c("message", "call"))) {
       showAlert("Error", mess[["message"]], "error", 5000)
     } else {
@@ -85,6 +98,23 @@ server <- function(input, output, session) {
       updateTabsetPanel(session, "SideTabs", selected = "plane")
       showAlert("Success", "The image was uploaded successfully!", "success", 1000)
     }
+  })
+  
+  observeEvent(input$confirmUpload,{
+    DataAnalysisModule$wbResult = wbResult0
+    file <- !is.null(input$imImport) && file.exists(input$imImport$datapath)
+    mess = readfile(filename = input$imImport$datapath, type = "tif", file)
+    
+    if(setequal(names(mess), c("message", "call"))) {
+      showAlert("Error", mess[["message"]], "error", 5000)
+    } else {
+      Flags$ShowTif <- TRUE
+      wbResult$Im = mess
+      updateTabsetPanel(session, "SideTabs", selected = "plane")
+      showAlert("Success", "The image was uploaded successfully!", "success", 1000)
+    }
+    
+    removeModal()
   })
   
   observe({
@@ -896,6 +926,180 @@ server <- function(input, output, session) {
   observeEvent(toListenWBquant(),{
     DataAnalysisModule$wbquantResult = reactiveValuesToList(wbquantResult)
   })
+  
+  observeEvent(input$loadStatAnalysis_file_Button,{
+    manageSpinner(TRUE)
+    
+    result <- readfile(
+      filename = input$loadStatAnalysis_file$datapath, 
+      type = "RDsMulti",
+      isFileUploaded = !is.null(input$loadStatAnalysis_file)
+    )
+    
+    if (!is.null(result$error)) {
+      showAlert("Error", result$error, "error", 5000)
+      manageSpinner(FALSE)
+      return()
+    }
+    
+    datapaths <- input$loadStatAnalysis_file$datapath
+    for(dpath in 1:length(datapaths)){
+      mess <- readRDS(datapaths[dpath])
+      
+      if(!(all(names(mess) %in% names(DataAnalysisModule)) ||
+           all(names(mess) %in% names(elisaResult)) ||
+           all(names(mess) %in% names(wbquantResult)) || 
+           all(names(mess) %in% names(pcrResult)) ||
+           all(names(mess) %in% names(cytotoxResult)) ||
+           all(names(mess) %in% names(endocResult)))){
+        showAlert("Error", paste(mess[["message"]],"\n The file must be RDs saved through the Data Analysis module."), "error", 5000)
+        manageSpinner(FALSE)
+        return()
+      }
+      
+      DataStatisticModule$Flag <- TRUE
+      
+      if(all(names(mess) %in% names(wbquantResult)) || all(names(mess) %in% names(DataAnalysisModule))){
+        DataStatisticModule$WB[[dpath]] <- mess$AdjRelDensitiy %>% mutate(DataSet = dpath)
+      } else if(all(names(mess) %in% names(pcrResult)) || all(names(mess) %in% names(DataAnalysisModule))){
+        DataAnalysisModule$PRCC[[dpath]]  <- mess
+      } else if(all(names(mess) %in% names(endocResult)) || all(names(mess) %in% names(DataAnalysisModule))){
+        DataAnalysisModule$ENDOC[[dpath]]  <- mess
+      } else if(all(names(mess) %in% names(elisaResult)) || all(names(mess) %in% names(DataAnalysisModule))){
+        DataAnalysisModule$ELISA[[dpath]]  <- mess
+      } else if(all(names(mess) %in% names(cytotoxResult)) || all(names(mess) %in% names(DataAnalysisModule))){
+        DataAnalysisModule$CYTOTOX[[dpath]]  <- mess
+      }
+    }
+    manageSpinner(FALSE)
+    showAlert("Success", "The RDs files have been uploaded with success", "success", 2000)
+    return(NULL)
+  })
+  
+  #start statistics
+  DataStatisticModule = reactiveValues(WB = list(),
+                                       PRCC = list(),
+                                       ELISA = list(),
+                                       ENDOC = list(),
+                                       CYTOTOX = list(),
+                                       Flag = F)
+  
+  DataStatisticresultListen <- reactive({
+    reactiveValuesToList(DataStatisticModule)
+  })
+  
+  observeEvent(DataStatisticresultListen(),{
+    
+    if(DataStatisticModule$Flag){
+      AnalysisNames = names(DataStatisticModule)[names(DataStatisticModule) != "Flag"]
+      Analysis = rep(F,length(AnalysisNames) )
+      names(Analysis) = AnalysisNames
+      for(j in AnalysisNames)
+        Analysis[j] = all(sapply(DataStatisticModule[[j]], is.null))
+      
+      AnalysisNames = AnalysisNames[!Analysis]
+      
+      updateSelectizeInput(inputId = "StatAnalysis",
+                           choices = c("",AnalysisNames),
+                           selected = "")
+      
+      DataStatisticModule$Flag = F
+    }
+    
+  })
+  
+  observeEvent(input$StatAnalysis,{
+    if(input$StatAnalysis != ""){
+      DataStatisticModule[[input$StatAnalysis]] -> results
+      do.call(rbind,results) -> results
+      
+      res = resTTest = NULL
+      resplot = ggplot()
+      
+      if(input$StatAnalysis == "WB"){
+        resTTest = res = results %>%
+          select(DataSet,SampleName,AdjRelDens) %>%
+          mutate(SampleName = gsub(pattern = "^[0-9]. ",x = SampleName,replacement = "")) %>%
+          tidyr::spread(key = DataSet,value = AdjRelDens ) 
+        
+        res$Mean = apply(res[,paste(unique(results$DataSet))],1,mean)
+        res$Sd = apply(res[,paste(unique(results$DataSet))],1,sd)
+        
+        resplot =ggplot(res, aes(x = SampleName,
+                                 y = Mean)) + 
+          geom_bar(stat="identity", color="black", fill = "#BAE1FF",
+                   position=position_dodge()) +
+          geom_errorbar(aes(ymin=Mean-Sd, ymax=Mean+Sd), width=.2,
+                        position=position_dodge(.9)) +
+          theme_bw()
+        
+        combo = expand.grid(resTTest$SampleName,resTTest$SampleName)
+        combo = combo[combo$Var1 != combo$Var2, ]
+        resTTest = do.call(rbind,
+                           lapply(1:dim(combo)[1],function(x){
+                             sn = combo[x,]
+                             ttest = t.test(resTTest[resTTest$SampleName == sn$Var1, -1],resTTest[resTTest$SampleName == sn$Var2, -1]) 
+                             data.frame(Ttest = paste(sn$Var1, " vs ",sn$Var2), 
+                                        pValue = ttest$p.value,
+                                        conf.int = paste(ttest$conf.int,collapse = ";")
+                             )
+                           })
+        )
+        
+      }
+      
+      output$TabStat = renderDT({res})
+      output$PlotStat = renderPlot({resplot})
+      output$TabTTest = renderDT({resTTest})
+    }
+  })
+  
+  ### End Statistic ####
+  
+  
+  #----------------------------------------------------------------------------------
+  # OTHER ANALYSIS TO DO
+  elisaResult  = reactiveValues(
+    Initdata= NULL,
+    data = NULL,
+    TablePlot = NULL,
+    dataFinal = NULL,
+    ELISAcell_EXP = NULL,
+    ELISAcell_SN = NULL,
+    MapBaseline = NULL,
+    MapBlank = NULL,
+    Tablestandcurve = NULL,
+    Regression = NULL)
+  
+  pcrResult = reactiveValues(
+    Initdata = NULL,
+    selectPCRcolumns = NULL,
+    data = NULL,
+    PCRnorm = NULL,
+    BaselineExp = NULL,
+    plotPRC = NULL,
+    NewPCR = NULL)
+  
+  cytotoxResult  = reactiveValues(
+    Initdata= NULL,
+    data = NULL,
+    TablePlot = NULL,
+    dataFinal = NULL,
+    CYTOTOXcell_EXP = NULL,
+    CYTOTOXcell_REP = NULL,
+    CYTOTOXcell_SN = NULL,
+    MapBaseline = NULL)
+  
+  endocResult = reactiveValues(
+    Initdata= NULL,
+    data = NULL,
+    TablePlot = NULL,
+    dataFinal = NULL,
+    ENDOCcell_TIME = NULL,
+    ENDOCcell_SN = NULL,
+    MapBaseline = NULL,
+    MapBlank = NULL)
+  
   
 }
 

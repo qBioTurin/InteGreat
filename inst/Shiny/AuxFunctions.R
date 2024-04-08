@@ -42,14 +42,29 @@ readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = 
       x
     },
     "RDsMulti" = {
-      x = lapply(filename, readRDS)
-      for (i in 1:length(x)) {
-        if (!all(names(x[[i]]) %in% namesAll)) {
-          return(list(message = "The RDs file must be generated from Data Analysis module.",
-                      call = ""))
-        }
+      result <- list(data = list(), error = NULL)
+      filenames <- filename 
+      
+      if (is.null(filenames) || length(filenames) == 0) {
+        result$error <- "Please select one or more .rds files."
+        return(result)
       }
-      x
+      
+      for (filename in filenames) {
+        if (!file.exists(filename)) {
+          result$error <- paste("The file", filename, "does not exist.")
+          return(result)
+        }
+        
+        if (tolower(tools::file_ext(filename)) != "rds") {
+          result$error <- paste("The file", filename, "is not a .rds file.")
+          return(result)
+        }
+        
+       
+      }
+      
+      return(result)
     },
     "Excel" = {
       x = readxl::read_excel(filename, col_names = colname)

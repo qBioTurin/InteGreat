@@ -60,6 +60,7 @@ ui <- dashboardPage(
     )
   ),
   dashboardBody(
+    useShinyalert(),
     tabItems(
       tabItem(tabName = "Home",
               h1("ORCA: Omni Reproducible Cell Analysis"),
@@ -317,8 +318,60 @@ ui <- dashboardPage(
                      )
                    )
               )
+            ),
+              
+              # end wb
+              
+              #start statistical analysis
+      tabItem(tabName = "StatAnalysis_tab",
+              h2("Statistical analysis"),
+              fluidRow(
+                box(width = 12,
+                    title = "Upload the analysis",
+                    fluidRow(
+                      column(
+                        10,
+                        fileInput(
+                          inputId = "loadStatAnalysis_file",
+                          label = "",
+                          placeholder = "Select the RDs files storing ORCA analyses",
+                          width = "80%", 
+                          multiple = TRUE)
+                      ),
+                      column(
+                        1,
+                        actionButton( label = "Load",style = "margin-top: 20px;",
+                                      icon = shiny::icon("upload"),
+                                      inputId = "loadStatAnalysis_file_Button" )
+                      )
+                    )
+                )
+              ),
+              fluidRow(
+                column(
+                  width = 10,
+                  offset = 1,
+                  verbatimTextOutput("loadStatAnalysis_Error")
+                )
+              ),
+              box(
+                width = 12,
+                collapsible = T,
+                collapsed = T,
+                title = "Comparison analysis",
+                selectizeInput("StatAnalysis",
+                               label = "Select the analysis:",
+                               choices = ""),
+                fluidRow(
+                  column(12,
+                         plotOutput("PlotStat"),
+                         DTOutput("TabStat"),
+                         DTOutput("TabTTest")
+                  )
+                )
+              )
+      )
       )
     )
-  )
 )
 

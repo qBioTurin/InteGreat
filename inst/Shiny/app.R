@@ -10,3 +10,4 @@ shinyApp(ui, server,
                             shiny.launch.browser = .rs.invokeShinyWindowExternal)
          )
 
+
