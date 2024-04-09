@@ -97,13 +97,6 @@ ui <- dashboardPage(
                     actionButton(label = "Load", style = "margin-top: 20px;", icon = shiny::icon("upload"), inputId = "loadAnalysis_Button")
                   )
                 ),
-                fluidRow(
-                  column(
-                    width = 10,
-                    offset = 1,
-                    verbatimTextOutput("loadAnalysis_Error")
-                  )
-                )
               )
       ),
       tabItem(tabName = "uploadIm",
@@ -319,10 +312,140 @@ ui <- dashboardPage(
                    )
               )
             ),
+      # end wb
               
-              # end wb
-              
-              #start statistical analysis
+      tabItem(tabName = "uploadIm",
+              h2("Upload Image"),
+              fluidRow(
+                column(9,
+                       fileInput(
+                         inputId = "imImport",
+                         label = "Select a tif file",
+                         placeholder = "Select a tif file",
+                         width = "90%"
+                       )
+                ),
+                column(2,
+                       actionButton(label = "Load",style = "margin-top: 20px;",
+                                    icon = shiny::icon("upload"),
+                                    inputId = "LoadingTif"
+                       )
+                ),
+                tags$style(type='text/css', "#LoadingTif { width:100%; margin-top: 20px;}")
+              ),
+              fluidRow(
+                column(9, offset = 1,
+                       tags$h5("In section «Upload Image», you have to upload the original file.tif and then you are directly redirected to «Protein Band» section.",
+                               style = "margin-top: 20px; text: center") 
+                )
+              )
+      ),
+      
+      # start RT-PCR
+      tabItem(tabName = "uploadPCR",
+              h2("Load RT-qPCR raw data"),
+              fluidRow( 
+                column(
+                  9,
+                  fileInput(
+                    inputId = "PCRImport",
+                    label = "",
+                    placeholder = "Select an Excel file",
+                    width = "80%"
+                  )
+                ),
+                column(
+                  2,
+                  actionButton(
+                    label = "Load",
+                    style = "margin-top: 20px; width: 100%;",
+                    icon = shiny::icon("upload"),
+                    inputId = "LoadPCR_Button"
+                  )
+                ),
+                tags$style(type='text/css', "#loadAnalysis_Button { width:100%; margin-top: 20px;}")
+              ),
+              fluidRow(
+                column(
+                  width = 10,offset = 1,
+                  verbatimTextOutput("LoadingError_PCR")
+                )
+              ),
+              fluidRow(
+                box(
+                  width = 12,
+                  title = "Experimental Setup:",
+                  column(
+                    width = 6,
+                    h2("Select the columns to assign"),
+                    fluidRow(
+                      column(
+                        width = 3,
+                        selectInput(
+                          inputId = "PCR_gene",
+                          label = "Gene names:",
+                          choices = ""
+                        )
+                      ),
+                      column(
+                        width = 3,
+                        selectInput(
+                          inputId = "PCR_sample",
+                          label = "Sample names:",
+                          choices = ""
+                        )
+                      ),
+                      column(
+                        width = 3,
+                        selectInput(
+                          inputId = "PCR_value",
+                          label = "Values:",
+                          choices = ""
+                        )
+                      ),
+                      column(
+                        width = 3,
+                        selectInput(
+                          inputId = "PCR_time",
+                          label = "Times:",
+                          choices = ""
+                        )
+                      )
+                    ),
+                    tableOutput("PCRpreview")
+                  ),
+                  column(
+                    width = 3,
+                    checkboxGroupInput(
+                      inputId = "PCRnorm",
+                      "Select housekeeping genes:"
+                    )
+                  ),
+                  column(
+                    width = 3,
+                    selectInput(
+                      inputId = "PCRbaseline",
+                      label = "Select baseline sample:",
+                      choices = "ID"
+                    )
+                  ),
+                  column(
+                    width = 3,
+                    offset = 9,
+                    actionButton(
+                      inputId = "NextQuantif",
+                      label = 'Proceed to Quantification',
+                      align = "right",
+                      icon = shiny::icon("forward")
+                    )
+                  )
+                )
+              )
+      ),
+      
+      
+      
+      #start statistical analysis
       tabItem(tabName = "StatAnalysis_tab",
               h2("Statistical analysis"),
               fluidRow(
@@ -330,7 +453,7 @@ ui <- dashboardPage(
                     title = "Upload the analysis",
                     fluidRow(
                       column(
-                        10,
+                        9,
                         fileInput(
                           inputId = "loadStatAnalysis_file",
                           label = "",
@@ -339,8 +462,9 @@ ui <- dashboardPage(
                           multiple = TRUE)
                       ),
                       column(
-                        1,
-                        actionButton( label = "Load",style = "margin-top: 20px;",
+                        2,
+                        actionButton( label = "Load",
+                                      style = "margin-top: 20px; width: 100%;",
                                       icon = shiny::icon("upload"),
                                       inputId = "loadStatAnalysis_file_Button" )
                       )

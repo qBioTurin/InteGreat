@@ -57,7 +57,7 @@ readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = 
         }
         
         if (tolower(tools::file_ext(filename)) != "rds") {
-          result$error <- paste("The file", filename, "is not a .rds file.")
+          result$error <- paste("The file", filename, "is not a .rds file")
           return(result)
         }
         
@@ -67,6 +67,12 @@ readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = 
       return(result)
     },
     "Excel" = {
+      if(!isFileUploaded || !file.exists(filename)) {
+        return (list(message = "Please, select an Excel file",call = ""))
+      } else if(tolower(tools::file_ext(filename)) != "xls" && tolower(tools::file_ext(filename)) != "xlsx") {
+        return(list(message = "Please, upload a file with a .xls or .xlsx extension.", call = ""))
+      } 
+      
       x = readxl::read_excel(filename, col_names = colname)
       if (allDouble) {
         xstr = which(sapply(1:dim(x)[2], function(i) !is.double(x[[i]])))

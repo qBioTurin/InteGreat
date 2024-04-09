@@ -28,9 +28,12 @@ server <- function(input, output, session) {
   MapAnalysisNames =c("WB", "WB comparison", "Endocytosis", "ELISA", "RT-qPCR", "Cytotoxicity") 
   names(MapAnalysisNames) =c("wbResult", "wbquantResult", "endocResult", "elisaResult", "pcrResult", "cytotoxResult") 
   
+  ### WB analysis ####
+  
   PanelData = data.frame(SampleName = character(),
                          xmin = numeric(), ymin = numeric(), 
                          xmax = numeric(), ymax = numeric())
+  
   
   wbResult <- reactiveValues(
     Normalizer = NULL,
@@ -73,6 +76,7 @@ server <- function(input, output, session) {
   NumberOfPlanes <- reactiveValues(N = 0)
   PlaneSelected <- reactiveValues(First = NULL)
   
+
   observeEvent(input$LoadingTif, {
     file <- !is.null(input$imImport) && file.exists(input$imImport$datapath)
     mess = readfile(filename = input$imImport$datapath, type = "tif", file)
@@ -976,6 +980,152 @@ server <- function(input, output, session) {
     return(NULL)
   })
   
+  ### End WB analysis ####
+  
+  #### PCR analysis ####
+  
+  pcrResult = reactiveValues(
+    Initdata = NULL,
+    selectPCRcolumns = NULL,
+    data = NULL,
+    PCRnorm = NULL,
+    BaselineExp = NULL,
+    plotPRC = NULL,
+    NewPCR = NULL)
+  pcrResult0 = list(
+    Initdata = NULL,
+    selectPCRcolumns = NULL,
+    data = NULL,
+    PCRnorm = NULL,
+    BaselineExp = NULL,
+    plotPRC = NULL,
+    NewPCR = NULL)
+  
+  # save everytime there is a change in the results
+  PCRresultListen <- reactive({
+    reactiveValuesToList(pcrResult)
+  })
+  observeEvent(PCRresultListen(), {
+    DataAnalysisModule$pcrResult = reactiveValuesToList(pcrResult)
+    DataAnalysisModule$pcrResult$Flags = reactiveValuesToList(FlagsPCR)
+  })
+  
+  ## next buttons
+  observeEvent(input$NextQuantif,{
+    updateTabsetPanel(session, "SideTabs",
+                      selected = "tablesPCR")
+  })
+  observeEvent(input$NextpcrPlots,{
+    updateTabsetPanel(session, "SideTabs",
+                      selected = "plotsPCR")
+  })
+  
+  FlagsPCR <- reactiveValues(norm=F, 
+                             baseline = F)
+  
+  observeEvent(input$LoadPCR_Button,{
+    
+    if( !is.null(pcrResult$Initdata) ) {
+      # If data is already present, show a modal asking for confirmation to update
+      showModal(modalDialog(
+        title = "Important message",
+        "Do you want to update the RT-PCR data already present?",
+        easyClose = TRUE,
+        footer= tagList(actionButton("confirmUploadPCR", "Update"),
+                        modalButton("Cancel")
+        )
+      ))
+    } else {
+        mess = readfile(
+          filename = input$PCRImport$datapath,
+          type = "Excel", 
+          isFileUploaded = !is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
+          colname = TRUE, 
+          namesAll = namesAll, 
+          allDouble = FALSE, 
+          colors = FALSE 
+        )
+        
+        if (!is.null(mess$message) && mess$call == "") {
+          showAlert("Error", mess$message, "error", 5000)
+        } else {
+          validate(
+            need(!is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
+                 "Please select an RT-qPCR excel file!!")
+          )
+          pcrResult$Initdata = mess
+          
+          updateSelectInput(session, "PCR_gene",
+                            choices = c("", colnames(pcrResult$Initdata)),
+                            selected = "")
+          updateSelectInput(session, "PCR_sample",
+                            choices = c("", colnames(pcrResult$Initdata)),
+                            selected = "")
+          updateSelectInput(session, "PCR_value",
+                            choices = c("", colnames(pcrResult$Initdata)),
+                            selected = "")
+          updateSelectInput(session, "PCR_time",
+                            choices = c("", colnames(pcrResult$Initdata)),
+                            selected = "")
+          showAlert("Success", "The RT-qPCR excel has been uploaded with success", "success", 2000)
+        }
+    }
+  })
+  
+  
+  observeEvent(input$confirmUploadPCR,{
+    
+    pcrResult = pcrResult0
+    
+    FlagsPCR$norm=F 
+    FlagsPCR$baseline = F
+    
+    output$PCRtables <- renderUI({ NULL })
+    output$PCRtablesComp <- renderUI({ NULL })
+    output$PCRplot <- renderPlot({ NULL })
+    
+    output$LoadingError_PCR <- renderText({
+      validate(
+        need(!is.null(input$PCRImport) && file.exists(input$PCRImport$datapath) ,
+             "Please select an RT-PCR excel file!!" )
+      )
+      
+      mess = readfile(
+        filename = input$PCRImport$datapath,
+        type = "Excel"
+      )
+      
+      validate(
+        need(!setequal(names(mess),c("message","call")) ,
+             mess[["message"]])
+      )
+      
+      pcrResult$Initdata = mess
+      
+      updateSelectInput(session,"PCR_gene",
+                        choices = c("",colnames(pcrResult$Initdata)),
+                        selected = ""
+      )
+      updateSelectInput(session,"PCR_sample",
+                        choices = c("",colnames(pcrResult$Initdata)),
+                        selected = ""
+      )
+      updateSelectInput(session,"PCR_value",
+                        choices = c("",colnames(pcrResult$Initdata)),
+                        selected = ""
+      )
+      updateSelectInput(session,"PCR_time",
+                        choices = c("",colnames(pcrResult$Initdata)),
+                        selected = ""
+      )
+      
+      removeModal()
+      
+      "The RDs has been uploaded  with success"
+    })
+  })
+  
+  
   #start statistics
   DataStatisticModule = reactiveValues(WB = list(),
                                        PRCC = list(),
@@ -1070,15 +1220,6 @@ server <- function(input, output, session) {
     MapBlank = NULL,
     Tablestandcurve = NULL,
     Regression = NULL)
-  
-  pcrResult = reactiveValues(
-    Initdata = NULL,
-    selectPCRcolumns = NULL,
-    data = NULL,
-    PCRnorm = NULL,
-    BaselineExp = NULL,
-    plotPRC = NULL,
-    NewPCR = NULL)
   
   cytotoxResult  = reactiveValues(
     Initdata= NULL,
