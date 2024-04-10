@@ -60,7 +60,6 @@ ui <- dashboardPage(
     )
   ),
   dashboardBody(
-    useShinyalert(),
     tabItems(
       tabItem(tabName = "Home",
               h1("ORCA: Omni Reproducible Cell Analysis"),
@@ -312,36 +311,9 @@ ui <- dashboardPage(
                    )
               )
             ),
-      # end wb
-              
-      tabItem(tabName = "uploadIm",
-              h2("Upload Image"),
-              fluidRow(
-                column(9,
-                       fileInput(
-                         inputId = "imImport",
-                         label = "Select a tif file",
-                         placeholder = "Select a tif file",
-                         width = "90%"
-                       )
-                ),
-                column(2,
-                       actionButton(label = "Load",style = "margin-top: 20px;",
-                                    icon = shiny::icon("upload"),
-                                    inputId = "LoadingTif"
-                       )
-                ),
-                tags$style(type='text/css', "#LoadingTif { width:100%; margin-top: 20px;}")
-              ),
-              fluidRow(
-                column(9, offset = 1,
-                       tags$h5("In section «Upload Image», you have to upload the original file.tif and then you are directly redirected to «Protein Band» section.",
-                               style = "margin-top: 20px; text: center") 
-                )
-              )
-      ),
+      # END wb
       
-      # start RT-PCR
+      # START PCR
       tabItem(tabName = "uploadPCR",
               h2("Load RT-qPCR raw data"),
               fluidRow( 
@@ -442,8 +414,53 @@ ui <- dashboardPage(
                 )
               )
       ),
-      
-      
+      tabItem(tabName = "tablesPCR",
+              h2("Quantification"),
+              fluidRow(
+                box(width= 12,
+                    #title = "Single Gene Quantification",
+                    title = "Normalization on Housekeeping Genes",
+                    collapsible = TRUE,
+                    collapsed = TRUE,
+                    uiOutput("PCRtables")
+                )
+              ),
+              # fluidRow(
+              #   box(width= 12,title = "Normalization on Housekeeping Genes",
+              #       collapsible = TRUE,
+              #       collapsed = TRUE,
+              #       uiOutput("PCRtablesComp")
+              #   )
+              # ),
+              fluidRow(
+                box(width= 12,title = "Plot",
+                    plotOutput("PCRplot",width = "100%"),
+                    fluidRow(
+                      # column(width = 1,offset = 7,
+                      #        actionButton(inputId = "NextpcrPlots",
+                      #                     label = 'Proceed to Plots',
+                      #                     align = "right",
+                      #                     icon = shiny::icon("forward"))
+                      # ),
+                      column(width = 1,offset = 1,
+                             downloadButton( label = "Download the analysis", 
+                                             outputId = "downloadButton_PCR",
+                                             #href = "Results.RData",
+                                             #download = "Results.RData",
+                                             icon = icon("download") )
+                      ),
+                      column(width = 1,offset = 2,
+                             downloadButton( label = "Download xlsx", 
+                                             outputId = "downloadButtonExcel_PCR",
+                                             #href = "Results.RData",
+                                             #download = "Results.RData",
+                                             icon = icon("download") )
+                      )
+                    )
+                )
+              )
+      ),
+      ## END data analysis:  RT-PCR 
       
       #start statistical analysis
       tabItem(tabName = "StatAnalysis_tab",
@@ -469,13 +486,6 @@ ui <- dashboardPage(
                                       inputId = "loadStatAnalysis_file_Button" )
                       )
                     )
-                )
-              ),
-              fluidRow(
-                column(
-                  width = 10,
-                  offset = 1,
-                  verbatimTextOutput("loadStatAnalysis_Error")
                 )
               ),
               box(

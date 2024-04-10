@@ -1158,51 +1158,42 @@ server <- function(input, output, session) {
     
   })
   
-  observeEvent(input$StatAnalysis,{
-    if(input$StatAnalysis != ""){
+  observeEvent(input$StatAnalysis, {
+    if (input$StatAnalysis != "") {
       DataStatisticModule[[input$StatAnalysis]] -> results
-      do.call(rbind,results) -> results
+      do.call(rbind, results) -> results
       
       res = resTTest = NULL
       resplot = ggplot()
       
-      if(input$StatAnalysis == "WB"){
-        resTTest = res = results %>%
-          select(DataSet,SampleName,AdjRelDens) %>%
-          mutate(SampleName = gsub(pattern = "^[0-9]. ",x = SampleName,replacement = "")) %>%
-          tidyr::spread(key = DataSet,value = AdjRelDens ) 
+      if (input$StatAnalysis == "WB") {
+        res = results %>%
+          select(DataSet, SampleName, AdjRelDens) %>%
+          mutate(SampleName = gsub(pattern = "^[0-9]. ", x = SampleName, replacement = ""))
         
-        res$Mean = apply(res[,paste(unique(results$DataSet))],1,mean)
-        res$Sd = apply(res[,paste(unique(results$DataSet))],1,sd)
+        # Usa pivot_longer invece di gather
+        dati_punti = res %>% 
+          tidyr::pivot_longer(cols = -SampleName, names_to = "DataSet", values_to = "AdjRelDens") %>% 
+          mutate(SampleName = as.factor(SampleName))
         
-        resplot =ggplot(res, aes(x = SampleName,
-                                 y = Mean)) + 
-          geom_bar(stat="identity", color="black", fill = "#BAE1FF",
-                   position=position_dodge()) +
-          geom_errorbar(aes(ymin=Mean-Sd, ymax=Mean+Sd), width=.2,
-                        position=position_dodge(.9)) +
+        # Calcola media e sd per ogni SampleName
+        stats = dati_punti %>%
+          group_by(SampleName) %>%
+          summarise(Mean = mean(AdjRelDens), Sd = sd(AdjRelDens))
+        
+        resplot = ggplot(stats, aes(x = SampleName, y = Mean)) + 
+          geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
+          geom_errorbar(aes(ymin=Mean-Sd, ymax=Mean+Sd), width=.2, position=position_dodge(.9)) +
+          geom_point(data = dati_punti, aes(x = SampleName, y = AdjRelDens), position = position_jitter(width = 0.2), color = "red") +
           theme_bw()
-        
-        combo = expand.grid(resTTest$SampleName,resTTest$SampleName)
-        combo = combo[combo$Var1 != combo$Var2, ]
-        resTTest = do.call(rbind,
-                           lapply(1:dim(combo)[1],function(x){
-                             sn = combo[x,]
-                             ttest = t.test(resTTest[resTTest$SampleName == sn$Var1, -1],resTTest[resTTest$SampleName == sn$Var2, -1]) 
-                             data.frame(Ttest = paste(sn$Var1, " vs ",sn$Var2), 
-                                        pValue = ttest$p.value,
-                                        conf.int = paste(ttest$conf.int,collapse = ";")
-                             )
-                           })
-        )
-        
       }
       
-      output$TabStat = renderDT({res})
+      output$TabStat = renderDT({stats}) # Assicurati che stats sia il dataframe che vuoi mostrare
       output$PlotStat = renderPlot({resplot})
       output$TabTTest = renderDT({resTTest})
     }
   })
+  
   
   ### End Statistic ####
   
