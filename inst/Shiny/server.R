@@ -1125,6 +1125,225 @@ server <- function(input, output, session) {
     })
   })
   
+  observeEvent(list(input$PCR_value,input$PCR_gene,input$PCR_sample,input$PCR_time),{
+    if( !is.null(pcrResult$Initdata) ){
+      selectPCRcolumns = c(input$PCR_gene,input$PCR_sample,input$PCR_value,input$PCR_time)
+      selectPCRcolumns = selectPCRcolumns[selectPCRcolumns!= ""]
+      
+      PCR = pcrResult$Initdata
+      colNames = colnames(PCR)
+      output$PCRpreview = renderTable({
+        if(length(selectPCRcolumns)!=0 ){
+          tmp = PCR[,selectPCRcolumns]
+          #colnames(tmp) = c("Gene", "Sample", "Value")[1:length(colnames(tmp))]
+          head(tmp) 
+        }
+        else
+          NULL
+      })
+      
+      if(length(selectPCRcolumns)==3 ){
+        tmp = PCR[,selectPCRcolumns]
+        colnames(tmp) = c("Gene", "Sample", "Value")
+        tmp$Time = ""
+        pcrResult$data = tmp
+        pcrResult$selectPCRcolumns = selectPCRcolumns
+      }else if(length(selectPCRcolumns)==4 ){
+        tmp = PCR[,selectPCRcolumns]
+        colnames(tmp) = c("Gene", "Sample", "Value","Time")
+        pcrResult$data = tmp
+        pcrResult$selectPCRcolumns = selectPCRcolumns
+      }else{
+        pcrResult$data = NULL
+      }
+    }
+    
+  })
+  
+  observe({
+    if(!is.null(pcrResult$data)){
+      
+      PCR = pcrResult$data
+      
+      AllGenes = unique(PCR$Gene)
+      Exp = unique(PCR$Sample)
+      
+      updateSelectInput(session, "PCRbaseline",
+                        choices = Exp )
+      updateCheckboxGroupInput(session,"PCRnorm",
+                               choices = AllGenes )
+      
+    }else{
+      updateSelectInput(session, "PCRbaseline",
+                        choices = "" )
+      updateCheckboxGroupInput(session,"PCRnorm",
+                               choices = "" )
+    }
+  })
+  
+  observeEvent(input$PCRnorm,{
+    pcrResult$PCRnorm = input$PCRnorm
+    FlagsPCR$norm = T
+  })
+  observeEvent(input$PCRbaseline,{
+    pcrResult$BaselineExp = input$PCRbaseline
+    FlagsPCR$baseline = T
+  })
+  
+  observe({
+    if(FlagsPCR$baseline & FlagsPCR$norm & !is.null(pcrResult$data)){
+      
+      pcrResult$BaselineExp -> BaselineExp
+      pcrResult$PCRnorm -> PCRnorm
+      pcrResult$data -> PCR
+      
+      NewPCR = PCR %>% 
+        na.omit()%>%
+        group_by(Sample,Gene,Time) %>%
+        dplyr::summarise(Mean = mean(Value),
+                         Sd = sd(Value)) %>%
+        ungroup()
+      
+      HousekGenePCR = NewPCR %>%
+        filter(Gene %in% PCRnorm)%>%
+        rename(HousekGene = Gene,HousekGeneMean=Mean, HousekGeneSd=Sd) 
+      
+      PCRstep2 = merge(HousekGenePCR,NewPCR %>% filter(!Gene %in% PCRnorm),all.y = T,by=c("Sample","Time") )
+      
+      #PCRstep3 = merge(BaselinePCR,PCRstep2,all.y = T,by=c("Gene","Time") )
+      
+      
+      PCRstep3 = PCRstep2 %>%
+        group_by(Sample,Gene,Time) %>%
+        dplyr::mutate(dCt = Mean - HousekGeneMean)%>%
+        ungroup()
+      
+      BaselinePCR = PCRstep3 %>% 
+        filter(Sample == BaselineExp) %>%
+        rename(BaselineMean=Mean, BaselineSd=Sd,BaselinedCt = dCt) %>%
+        dplyr::select(-Sample, -HousekGene, -HousekGeneMean, -HousekGeneSd)
+      
+      PCRstep4 = merge(BaselinePCR,PCRstep3,all.y = T,by=c("Gene","Time") )
+      
+      PCRstep5 = PCRstep4 %>%
+        group_by(Sample,Gene,Time) %>%
+        dplyr::summarize(
+          ddCt = dCt - BaselinedCt,
+          Q = 2^{-ddCt},
+          Sd = Sd,
+          Mean = Mean)%>%
+        ungroup()
+      
+      
+      NormPCR = PCRstep5 %>%
+        filter(Gene %in% PCRnorm ) %>%
+        rename(Norm = Gene,
+               NormQ = Q,
+               NormSd = Sd,
+               NormMean = Mean)
+      
+      # CompPRC = merge(OnePCR,NormPCR)
+      # 
+      # CompPRC = CompPRC %>% group_by(Sample,Gene,Norm) %>%
+      #   dplyr::summarise(Qnorm = Q/NormQ,
+      #                    SDddct = sqrt(Sd^2+NormSd^2),
+      #                    SDrq = log(2)*Qnorm*SDddct) %>%
+      #   ungroup()
+      
+      AllGenes = unique(PCR$Gene)
+      
+      #pcrResult$CompPRC = CompPRC
+      pcrResult$NewPCR = PCRstep5
+      
+      output$PCRtables <- renderUI({
+        plot_output_list <- lapply(AllGenes, function(i) {
+          tablename <- paste("tablename", i, sep="")
+          tableOutput(tablename)
+        })
+        do.call(tagList, plot_output_list)
+      })
+      
+      # output$PCRtablesComp <- renderUI({
+      #   plot_output_list <- lapply(AllGenes[-which(AllGenes %in% PCRnorm)], function(i) {
+      #     tablename <- paste("CompTablename", i, sep="")
+      #     tableOutput(tablename)
+      #   })
+      #   do.call(tagList, plot_output_list)
+      # })
+      
+      plot1 = ggplot(data = PCRstep5,
+                     aes(x= as.factor(Time), y = ddCt, col = Sample)) + 
+        facet_wrap(~Gene, ncol = 1) +
+        geom_jitter(width = 0.1, height = 0,size = 2)+
+        theme_bw()+
+        labs(x = "Time", y = "DDCT")
+      
+      plot2 = ggplot(data = PCRstep5,
+                     aes(x= as.factor(Time), y = Q, col = Sample)) + 
+        facet_wrap(~Gene, ncol = 1) +
+        geom_jitter(width = 0.1, height = 0,size = 2)+
+        theme_bw()+
+        labs(x = "Time", y = "2^(-DDCT)")
+      
+      pcrResult$plotPRC =  plot1/plot2
+      
+      output$PCRplot <- renderPlot({
+        pcrResult$plotPRC
+      })
+      
+      for (i in AllGenes[!AllGenes %in% PCRnorm]){
+        local({
+          my_i <- i
+          tablename <- paste("tablename", my_i, sep="")
+          output[[tablename]] <- renderTable({
+            PCRstep5 %>% filter(Gene == my_i) %>% rename(DDCT = ddCt, `2^(-DDCT)` = Q)
+          })
+          
+          # ComparisonPCR = list()
+          # if(my_i %in% AllGenes[-which(AllGenes %in% PCRnorm)]){
+          #   tablename <- paste("CompTablename", my_i, sep="")
+          #   output[[tablename]] <- renderTable({
+          #     CompPRC %>% 
+          #       filter(Gene == my_i) %>%
+          #       arrange(Norm,Sample)
+          #   })
+          # }
+        })    
+      }
+      
+    }
+  })
+  
+  observe({
+    DataAnalysisModule$pcrResult = reactiveValuesToList(pcrResult)
+  })
+  
+  output$downloadRTPCRAnalysis <- downloadHandler(
+    filename = function() {
+      paste('RTqPCRanalysis-', Sys.Date(), '.zip', sep='')
+    },
+    content = function(file) {
+      manageSpinner(TRUE)
+      
+      tempDir <- tempdir()
+      
+      nomeRDS <- paste0("RTqPCRanalysis-", Sys.Date(), ".rds")
+      nomeXLSX <- paste0("RTqPCRanalysis-", Sys.Date(), ".xlsx")
+      
+      tempRdsPath <- file.path(tempDir, nomeRDS)
+      tempXlsxPath <- file.path(tempDir, nomeXLSX)
+      
+      results <- DataAnalysisModule$pcrResult
+      saveRDS(results, file = tempRdsPath)
+      saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "RT-qPCR")
+      
+      zip(file, files = c(tempRdsPath, tempXlsxPath), flags = "-j")
+      manageSpinner(FALSE)
+    },
+  )
+  
+  #### END PCR analysis ####
+  
   
   #start statistics
   DataStatisticModule = reactiveValues(WB = list(),

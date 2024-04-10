@@ -250,7 +250,21 @@ saveExcel <- function(filename, ResultList, analysis) {
       )
     }
     insertPlot(wb, sheet = "Barplot AdjRelDensitiy")
-  } 
+  }
+  else if(analysis =="RT-qPCR"){
+    wb <- createWorkbook("RTqPCR")
+    
+    addWorksheet(wb,"Table")
+    writeDataTable(wb, sheet = "Table", ResultList[["Initdata"]])
+    
+    addWorksheet(wb,"Norm PRC")
+    writeDataTable(wb,ResultList[["NewPCR"]], sheet="Norm PRC")
+    
+    print(ResultList[["plotPRC"]])
+    insertPlot(wb = wb,  sheet="Norm PRC",
+               startCol=dim(ResultList[["NewPCR"]])[2]+ 2)
+    
+  }
   
   saveWorkbook(wb, filename)
   return(1)

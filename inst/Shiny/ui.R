@@ -436,25 +436,11 @@ ui <- dashboardPage(
                 box(width= 12,title = "Plot",
                     plotOutput("PCRplot",width = "100%"),
                     fluidRow(
-                      # column(width = 1,offset = 7,
-                      #        actionButton(inputId = "NextpcrPlots",
-                      #                     label = 'Proceed to Plots',
-                      #                     align = "right",
-                      #                     icon = shiny::icon("forward"))
-                      # ),
-                      column(width = 1,offset = 1,
-                             downloadButton( label = "Download the analysis", 
-                                             outputId = "downloadButton_PCR",
-                                             #href = "Results.RData",
-                                             #download = "Results.RData",
-                                             icon = icon("download") )
-                      ),
-                      column(width = 1,offset = 2,
-                             downloadButton( label = "Download xlsx", 
-                                             outputId = "downloadButtonExcel_PCR",
-                                             #href = "Results.RData",
-                                             #download = "Results.RData",
-                                             icon = icon("download") )
+                      column(width = 8, offset = 2, 
+                             downloadButton(outputId = "downloadRTPCRAnalysis", 
+                                            label = "Download Analysis & Excel", 
+                                            icon = icon("download"),
+                                            style = "float: right;"), 
                       )
                     )
                 )
