@@ -11,6 +11,51 @@ manageSpinner <- function(isDownloading) {
   }
 }
 
+resetPanel <- function(type, flags, panelStructures, numberOfPlanes, planeSelected, result, output, panelData, pcrResult = NULL) {
+  switch(type,
+         "WB" = {
+           flags$ShowTif <- FALSE
+           flags$LanesCut <- FALSE
+           flags$CutTab <- "V"
+           flags$IDlane <- 0
+           
+           panelStructures$data <- panelData  
+           
+           numberOfPlanes$N <- 0
+           planeSelected$First <- NULL
+           
+           result$Normalizer <- NULL
+           result$Im <- NULL
+           result$Planes <- NULL
+           result$TruncatedPanelsValue <- NULL
+           result$PanelsValue <- NULL
+           result$Plots <- NULL
+           result$TruncatedPlots <- NULL
+           result$pl <- NULL
+           result$AUCdf <- data.frame(SampleName = "-", Truncation = "-", AUC = "-")
+           
+           output$DataPlot <- renderPlot({}) 
+           output$AUC <- renderDT({data.frame()})  
+           output$AUC_RelDens <- renderDT({data.frame()})
+           output$AUC_AdjRelDens <- renderDT({data.frame()})
+           output$plot_AdjRelDens <- renderPlot({})
+         },
+        "PCR" = {
+           pcrResult$Initdata <- NULL
+           pcrResult$selectPCRcolumns <- NULL
+           pcrResult$data <- NULL
+           pcrResult$PCRnorm <- NULL
+           pcrResult$BaselineExp <- NULL
+           pcrResult$plotPRC <- NULL
+           pcrResult$NewPCR <- NULL
+        },
+         error = function(cond) {
+           showAlert("Error", "an error occured", "error", 5000)
+         }
+  )
+}
+
+
 # function called when you need to read a file
 readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = namesAll, allDouble = FALSE, colors = FALSE) {
   out <- tryCatch({

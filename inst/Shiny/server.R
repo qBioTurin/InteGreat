@@ -9,6 +9,8 @@ source("./inst/Shiny/AuxFunctions.R")
 
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
+  alert <- reactiveValues(alertContext = NULL)
+  
   DataAnalysisModule <- reactiveValues(wbResult = NULL,
                                        wbquantResult = NULL,
                                        endocResult = NULL,
@@ -78,36 +80,37 @@ server <- function(input, output, session) {
   
 
   observeEvent(input$LoadingTif, {
-    file <- !is.null(input$imImport) && file.exists(input$imImport$datapath)
-    mess = readfile(filename = input$imImport$datapath, type = "tif", file)
-    
-    if( !is.null(wbResult$Im) ) { 
-      showModal(modalDialog(
-          title = "Important message",
-          "Do you want to update the WB data already present, by resetting the previous analysis?",
-          easyClose = TRUE,
-          footer= tagList(actionButton("confirmUpload", "Update"),
-                          modalButton("Cancel")
-          )
-        )
+    alert$alertContext <- "WB-reset"
+    if(!is.null(wbResult$Im) ) { 
+      shinyalert(
+        title = "Important message",
+        text = "Do you want to update the WB data already present, by resetting the previous analysis?",
+        type = "warning",
+        showCancelButton = TRUE,
+        confirmButtonText = "Update",
+        cancelButtonText = "Cancel",
       )
-      return()
-    }
-    
-    if(setequal(names(mess), c("message", "call"))) {
-      showAlert("Error", mess[["message"]], "error", 5000)
-    } else {
-      Flags$ShowTif <- TRUE
-      wbResult$Im = mess
-      updateTabsetPanel(session, "SideTabs", selected = "plane")
-      showAlert("Success", "The image was uploaded successfully!", "success", 1000)
+    } else loadTifFile()
+  })
+  
+  observeEvent(input$shinyalert, {
+    removeModal()
+    if (input$shinyalert && alert$alertContext == "WB-reset") {  
+      resetPanel("WB", 
+                 Flags, 
+                 PanelStructures, 
+                 NumberOfPlanes, 
+                 PlaneSelected, 
+                 wbResult, 
+                 output, PanelData)
+      loadTifFile()
     }
   })
   
-  observeEvent(input$confirmUpload,{
-    DataAnalysisModule$wbResult = wbResult0
+  loadTifFile <- function() {
     file <- !is.null(input$imImport) && file.exists(input$imImport$datapath)
     mess = readfile(filename = input$imImport$datapath, type = "tif", file)
+    
     
     if(setequal(names(mess), c("message", "call"))) {
       showAlert("Error", mess[["message"]], "error", 5000)
@@ -115,11 +118,10 @@ server <- function(input, output, session) {
       Flags$ShowTif <- TRUE
       wbResult$Im = mess
       updateTabsetPanel(session, "SideTabs", selected = "plane")
+      alert$alertContext <- NULL
       showAlert("Success", "The image was uploaded successfully!", "success", 1000)
     }
-    
-    removeModal()
-  })
+  }
   
   observe({
     if(Flags$ShowTif) {
@@ -1023,6 +1025,7 @@ server <- function(input, output, session) {
   FlagsPCR <- reactiveValues(norm=F, 
                              baseline = F)
   
+  
   observeEvent(input$LoadPCR_Button,{
     
     if( !is.null(pcrResult$Initdata) ) {
@@ -1036,39 +1039,39 @@ server <- function(input, output, session) {
         )
       ))
     } else {
-        mess = readfile(
-          filename = input$PCRImport$datapath,
-          type = "Excel", 
-          isFileUploaded = !is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
-          colname = TRUE, 
-          namesAll = namesAll, 
-          allDouble = FALSE, 
-          colors = FALSE 
+      mess = readfile(
+        filename = input$PCRImport$datapath,
+        type = "Excel", 
+        isFileUploaded = !is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
+        colname = TRUE, 
+        namesAll = namesAll, 
+        allDouble = FALSE, 
+        colors = FALSE 
+      )
+      
+      if (!is.null(mess$message) && mess$call == "") {
+        showAlert("Error", mess$message, "error", 5000)
+      } else {
+        validate(
+          need(!is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
+               "Please select an RT-qPCR excel file!!")
         )
+        pcrResult$Initdata = mess
         
-        if (!is.null(mess$message) && mess$call == "") {
-          showAlert("Error", mess$message, "error", 5000)
-        } else {
-          validate(
-            need(!is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
-                 "Please select an RT-qPCR excel file!!")
-          )
-          pcrResult$Initdata = mess
-          
-          updateSelectInput(session, "PCR_gene",
-                            choices = c("", colnames(pcrResult$Initdata)),
-                            selected = "")
-          updateSelectInput(session, "PCR_sample",
-                            choices = c("", colnames(pcrResult$Initdata)),
-                            selected = "")
-          updateSelectInput(session, "PCR_value",
-                            choices = c("", colnames(pcrResult$Initdata)),
-                            selected = "")
-          updateSelectInput(session, "PCR_time",
-                            choices = c("", colnames(pcrResult$Initdata)),
-                            selected = "")
-          showAlert("Success", "The RT-qPCR excel has been uploaded with success", "success", 2000)
-        }
+        updateSelectInput(session, "PCR_gene",
+                          choices = c("", colnames(pcrResult$Initdata)),
+                          selected = "")
+        updateSelectInput(session, "PCR_sample",
+                          choices = c("", colnames(pcrResult$Initdata)),
+                          selected = "")
+        updateSelectInput(session, "PCR_value",
+                          choices = c("", colnames(pcrResult$Initdata)),
+                          selected = "")
+        updateSelectInput(session, "PCR_time",
+                          choices = c("", colnames(pcrResult$Initdata)),
+                          selected = "")
+        showAlert("Success", "The RT-qPCR excel has been uploaded with success", "success", 2000)
+      }
     }
   })
   
