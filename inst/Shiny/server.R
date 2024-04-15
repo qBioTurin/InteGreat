@@ -9,7 +9,7 @@ source("./inst/Shiny/AuxFunctions.R")
 
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
-  alert <- reactiveValues(alertContext = NULL)
+  alert <- reactiveValues(alertContext = "")
   
   DataAnalysisModule <- reactiveValues(wbResult = NULL,
                                        wbquantResult = NULL,
@@ -108,6 +108,7 @@ server <- function(input, output, session) {
   })
   
   loadTifFile <- function() {
+    alert$alertContext <- ""
     file <- !is.null(input$imImport) && file.exists(input$imImport$datapath)
     mess = readfile(filename = input$imImport$datapath, type = "tif", file)
     
@@ -118,7 +119,6 @@ server <- function(input, output, session) {
       Flags$ShowTif <- TRUE
       wbResult$Im = mess
       updateTabsetPanel(session, "SideTabs", selected = "plane")
-      alert$alertContext <- NULL
       showAlert("Success", "The image was uploaded successfully!", "success", 1000)
     }
   }
