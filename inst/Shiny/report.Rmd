@@ -3,14 +3,16 @@ title: "Report Omni Reproducible Cell Analysis"
 date: "`r Sys.Date()`"
 output: pdf_document
 params:
-   ResultList: x
+   ResultList: list()
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 library(ggplot2)
 library(DT)
-ResultList = parmsList$ResultList
+library(dplyr)
+ResultList <- params$ResultList
+
 ```
 
 ## ELISA
@@ -18,15 +20,31 @@ ResultList = parmsList$ResultList
 ### Initial Data
 
 ```{r, echo=FALSE}
-ResultList$elisaResult[["TablePlot"]]
+if (!is.null(ResultList$elisaResult[["TablePlot"]])) {
+  DT::datatable(ResultList$elisaResult[["TablePlot"]])
+}
 ```
 
 ### Regression analysis
 
 ```{r, echo=FALSE}
-ResultList$elisaResult[["Tablestandcurve"]]
-ResultList$elisaResult[["Regression"]]$data
-ResultList$elisaResult[["Regression"]]$plot
+if (!is.null(ResultList$elisaResult[["Tablestandcurve"]])) {
+  DT::datatable(ResultList$elisaResult[["Tablestandcurve"]])
+}
+
+if (!is.null(ResultList$elisaResult[["Regression"]])) {
+  regressionData <- ResultList$elisaResult[["Regression"]]$data
+  regressionPlot <- ResultList$elisaResult[["Regression"]]$plot
+  
+  if (!is.null(regressionData)) {
+    DT::datatable(regressionData)
+  }
+  
+  if (!is.null(regressionPlot)) {
+    print(regressionPlot)
+  }
+}
+
 ```
 
 
@@ -34,18 +52,14 @@ ResultList$elisaResult[["Regression"]]$plot
 
 ```{r, echo=FALSE}
 
-ResultList$elisaResult[["dataFinal"]]
-
-if(!is.null(ResultList$elisaResult[["dataFinal"]])){
-
-ResultList$elisaResult[["dataFinal"]] %>%
-            ggplot( aes(x = Time, y = Quantification,
-                        fill= Experiment, group = Experiment ) )+
-            geom_bar(position = "dodge",stat = "identity")+
-            theme_bw()+
-            labs(x = "Time", col = "Experiments",
-                 y = "Average quantifications obtained\n from the lm ")
+if (!is.null(ResultList$elisaResult[["dataFinal"]])) {
+  finalData <- ResultList$elisaResult[["dataFinal"]]
+  ggplot(finalData, aes(x = Time, y = Quantification, fill = Experiment, group = Experiment)) +
+    geom_bar(position = "dodge", stat = "identity") +
+    theme_bw() +
+    labs(x = "Time", y = "Average quantifications obtained\nfrom the lm", fill = "Experiment", group = "Experiment")
 }
+
 ```
 
 ## Cytotoxicity
@@ -53,24 +67,26 @@ ResultList$elisaResult[["dataFinal"]] %>%
 ### initial data
 
 ```{r, echo=FALSE}
-ResultList$cytotoxResult[["TablePlot"]]
+if (!is.null(ResultList$cytotoxResult[["TablePlot"]])) {
+  DT::datatable(ResultList$cytotoxResult[["TablePlot"]])
+}
 ```
 
 ### Analysis
 
 ```{r, echo=FALSE}
 
-data = ResultList$cytotoxResult[["data"]]
-ResultList$cytotoxResult[["dataFinal"]]
-
-if(!is.null(data)){
-  data %>% ggplot() +
-            geom_boxplot(aes(x = as.factor(EXP), y = Res, fill = SN, col = SN),alpha = 0.4) +
-            theme_bw() +
-            labs(x = "Experimental condition", y= "% Values w.r.t \nthe baseline cell death",
-                 col="Sample Name",fill="Sample Name")
+if (!is.null(ResultList$cytotoxResult[["dataFinal"]])) {
+  finalData <- ResultList$cytotoxResult[["dataFinal"]]
+  DT::datatable(finalData)
+  
+  if (!is.null(finalData)) {
+    ggplot(finalData, aes(x = as.factor(EXP), y = Res, fill = SN, col = SN)) +
+      geom_boxplot(alpha = 0.4) +
+      theme_bw() +
+      labs(x = "Experimental condition", y = "% Values w.r.t the baseline cell death", fill = "Sample Name", color = "Sample Name")
+  }
 }
-
 
 ```
 
@@ -80,12 +96,16 @@ if(!is.null(data)){
 ### Initial data
 
 ```{r, echo=FALSE} 
-  ResultList$endocResult[["TablePlot"]]
+if (!is.null(ResultList$endocResult[["TablePlot"]])) {
+  DT::datatable(ResultList$endocResult[["TablePlot"]])
+}
 ```
 
 ### Analysis
 ```{r, echo=FALSE}    
-ResultList$endocResult[["dataFinal"]]
+if (!is.null(ResultList$endocResult[["dataFinal"]])) {
+  DT::datatable(ResultList$endocResult[["dataFinal"]])
+}
 ```
 
 ## RT-qPCR
@@ -93,15 +113,23 @@ ResultList$endocResult[["dataFinal"]]
 ### Initial data
 
 ```{r, echo=FALSE}
- ResultList$pcrResult[["Initdata"]]
+if (!is.null(ResultList$pcrResult[["Initdata"]])) {
+  DT::datatable(ResultList$pcrResult[["Initdata"]])
+}
 ```
 
 ## Normalization on Housekeeping Genes
 
 ```{r, echo=FALSE}
 
-ResultList$pcrResult[["NewPCR"]]
-ResultList$pcrResult[["plotPRC"]]
+if (!is.null(ResultList$pcrResult[["NewPCR"]])) {
+  DT::datatable(ResultList$pcrResult[["NewPCR"]])
+}
+
+if (!is.null(ResultList$pcrResult[["plotPRC"]])) {
+  print(ResultList$pcrResult[["plotPRC"]])
+}
+
 ```
 
 <!-- ### Comp Analysis -->
@@ -124,26 +152,31 @@ ResultList$pcrResult[["plotPRC"]]
 
 ```{r, echo=FALSE}
     
-if(!is.null(ResultList$wbResult[["Im"]])){
-  ResultList$wbResult[["Im"]] -> ListIm 
-    im = ListIm$RGB
-    
-    plot(c(1,dim(im)[2]),c(1,dim(im)[1]), type='n',ann=FALSE)
-    rasterImage(im,1,1,dim(im)[2],dim(im)[1])
+if (!is.null(ResultList$pcrResult[["NewPCR"]])) {
+  DT::datatable(ResultList$pcrResult[["NewPCR"]])
 }
+
+if (!is.null(ResultList$pcrResult[["plotPRC"]])) {
+  print(ResultList$pcrResult[["plotPRC"]])
+}
+
 ```
 
 ### Analysis
 ```{r, echo=FALSE}   
-
-if(!is.null(ResultList$wbResult[["Plots"]])){
-  ResultList$wbResult[["Plots"]]+ labs(title="Initial curve")
-}
-if(!is.null(ResultList$wbResult[["TruncatedPlots"]])){
-  ResultList$wbResult[["TruncatedPlots"]]+ labs(title="Truncated curve")
+if (!is.null(ResultList$wbResult[["Plots"]])) {
+  print(ResultList$wbResult[["Plots"]] + labs(title = "Initial curve"))
 }
 
-ResultList$wbResult[["AUCdf"]]
+if (!is.null(ResultList$wbResult[["TruncatedPlots"]])) {
+  print(ResultList$wbResult[["TruncatedPlots"]] + labs(title = "Truncated curve"))
+}
+
+if (!is.null(ResultList$wbResult[["AUCdf"]])) {
+  DT::datatable(ResultList$wbResult[["AUCdf"]])
+}
+
+
 ```
 
 ### WB comparison
@@ -151,17 +184,20 @@ ResultList$wbResult[["AUCdf"]]
 ### Normalizer WB 
 
 ```{r, echo=FALSE}
-ResultList$wbquantResult[["NormWBanalysis_filtered"]]
-```
-### Normalizer WB 
+if (!is.null(ResultList$wbquantResult[["NormWBanalysis_filtered"]])) {
+  DT::datatable(ResultList$wbquantResult[["NormWBanalysis_filtered"]])
+}
 
-```{r, echo=FALSE}
-ResultList$wbquantResult[["WBanalysis_filtered"]]
-``` 
+if (!is.null(ResultList$wbquantResult[["WBanalysis_filtered"]])) {
+  DT::datatable(ResultList$wbquantResult[["WBanalysis_filtered"]])
+}
 
-### Densities
-```{r, echo=FALSE}
-ResultList$wbquantResult[["RelDensitiy"]]
-    
-ResultList$wbquantResult[["AdjRelDensitiy"]]
+if (!is.null(ResultList$wbquantResult[["RelDensitiy"]])) {
+  DT::datatable(ResultList$wbquantResult[["RelDensitiy"]])
+}
+
+if (!is.null(ResultList$wbquantResult[["AdjRelDensitiy"]])) {
+  DT::datatable(ResultList$wbquantResult[["AdjRelDensitiy"]])
+}
+
 ```

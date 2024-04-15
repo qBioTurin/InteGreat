@@ -1454,6 +1454,41 @@ server <- function(input, output, session) {
     MapBaseline = NULL,
     MapBlank = NULL)
   
+  # DOWNLOAD REPORT E RDS
+  output$downloadReport <- downloadHandler(
+    filename = function() {
+      "Report.html"
+    },
+    content = function(file) {
+      parmsList <- list(ResultList = reactiveValuesToList(DataAnalysisModule))
+      anyNotNull <- FALSE
+      
+      # Iteriamo attraverso ogni analisi presente in parmsList
+      for (analysisName in names(parmsList$ResultList)) {
+        analysisData <- parmsList$ResultList[[analysisName]]
+        
+        # Verifichiamo se ci sono valori non nulli nell'analisi corrente
+        if (!all(sapply(analysisData, is.null))) {
+          anyNotNull <- TRUE
+          cat(paste("Analysis with at least one non-null value:", analysisName, "\n"))
+        }
+      }
+      
+      # Se non ci sono analisi con valori non nulli, mostriamo un messaggio di errore
+      if (!anyNotNull) {
+        showAlert("Error", "no analysis", "error", 5000)
+      } else {
+        # Altrimenti, eseguiamo il download
+        rmarkdown::render(
+          "inst/shiny/report.Rmd",
+          output_file = file,
+          output_format = "html_document",
+          params = parmsList
+        )
+      }
+    }
+  )
   
+  # END DOWNLOAD
 }
 
