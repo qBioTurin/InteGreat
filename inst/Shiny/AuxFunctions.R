@@ -235,32 +235,51 @@ AUCfunction<-function(AUCdf,PanelsValue,bind=T,session = session,SName="1",AUCdf
   return(unique(A)) 
 }
 
-saveExcel <- function(filename, ResultList, analysis) {
+saveExcel <- function(filename, ResultList, analysis, PanelStructures = NULL) {
   if (file.exists(filename)) {
     file.remove(filename)
   }
+  
   if(analysis =="WB"){
     wb <- createWorkbook("WB")
     
-    addWorksheet(wb,"WBimage")
-    ResultList[["Im"]] -> ListIm 
-    im = ListIm$RGB
+    addWorksheet(wb, "WBimage")
+    ListIm <- ResultList[["Im"]] 
+    im <- ListIm$RGB
     
-    plot(c(1,dim(im)[2]),c(1,dim(im)[1]), type='n',ann=FALSE)
-    rasterImage(im,1,1,dim(im)[2],dim(im)[1])
-    insertPlot(wb = wb,  sheet="WBimage")
-
-    addWorksheet(wb,"Plot")
+    plot(c(1, dim(im)[2]), c(1, dim(im)[1]), type='n', ann=FALSE)
+    rasterImage(im, 1, 1, dim(im)[2], dim(im)[1])
+    insertPlot(wb = wb, sheet="WBimage")
+    
+    addWorksheet(wb, "WBimage and protein bands")
+    plot(c(1, dim(im)[2]), c(1, dim(im)[1]), type='n', ann=FALSE)
+    rasterImage(im, 1, 1, dim(im)[2], dim(im)[1])
+    if (!is.null(PanelStructures$data)) {
+      for (i in seq_len(nrow(PanelStructures$data))) {
+        with(PanelStructures$data, {
+          rect(xmin[i], ymin[i], xmax[i], ymax[i], border = "red")
+        })
+      }
+    }
+    insertPlot(wb = wb, sheet = "WBimage and protein bands")
+    
+    startRow <- 22
+    writeDataTable(wb, PanelStructures$data, sheet = "WBimage and protein bands", startRow = startRow, startCol = 1)
+    
+    addWorksheet(wb, "Plot")
     print(ResultList[["Plots"]])
-    insertPlot(wb = wb,  sheet="Plot")
+    insertPlot(wb = wb, sheet="Plot")
     
-    addWorksheet(wb,"Truncated Plot")
+    addWorksheet(wb, "Truncated Plot")
     print(ResultList[["TruncatedPlots"]])
-    insertPlot(wb = wb,  sheet="Truncated Plot")
+    insertPlot(wb = wb, sheet="Truncated Plot")
     
-    addWorksheet(wb,"AUC")
+    addWorksheet(wb, "AUC")
     finaldata = ResultList[["AUCdf"]]
-    writeDataTable(wb,finaldata, sheet="AUC")
+    writeDataTable(wb, finaldata, sheet="AUC")
+    
+    saveWorkbook(wb, filename)
+    return(1)
   } else if(analysis =="WB comparison"){
     ## Create a new workbook
     wb <- createWorkbook("WB comparison")

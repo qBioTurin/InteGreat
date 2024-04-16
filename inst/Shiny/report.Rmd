@@ -3,131 +3,106 @@ title: "Report Omni Reproducible Cell Analysis"
 date: "`r Sys.Date()`"
 output: pdf_document
 params:
-   ResultList: list()
+   ResultList: x
 ---
-
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(DT)
-library(dplyr)
-ResultList <- params$ResultList
+ResultList = parmsList$ResultList
 
+isEmptyOrNoninformative <- function(df) {
+  if (is.null(df) || nrow(df) == 0) {
+    return(TRUE)
+  }
+  all(sapply(df, function(column) all(column == "-")))
+}
 ```
 
-## ELISA
-
-### Initial Data
-
-```{r, echo=FALSE}
+```{r elisa-data, echo=FALSE, results='asis'}
 if (!is.null(ResultList$elisaResult[["TablePlot"]])) {
+  cat("### ELISA\n\n")
+  cat("#### Initial Data\n\n")
   DT::datatable(ResultList$elisaResult[["TablePlot"]])
 }
 ```
 
-### Regression analysis
-
-```{r, echo=FALSE}
-if (!is.null(ResultList$elisaResult[["Tablestandcurve"]])) {
+```{r regression-analysis, echo=FALSE, results='asis'}
+if (!is.null(ResultList$elisaResult[["Regression"]]$data)) {
+  cat("### Regression Analysis\n\n")
+  cat("#### Table of Standard Curve\n\n")
   DT::datatable(ResultList$elisaResult[["Tablestandcurve"]])
-}
-
-if (!is.null(ResultList$elisaResult[["Regression"]])) {
-  regressionData <- ResultList$elisaResult[["Regression"]]$data
-  regressionPlot <- ResultList$elisaResult[["Regression"]]$plot
   
-  if (!is.null(regressionData)) {
-    DT::datatable(regressionData)
-  }
-  
-  if (!is.null(regressionPlot)) {
-    print(regressionPlot)
-  }
-}
+  cat("#### Regression Data\n\n")
+  DT::datatable(ResultList$elisaResult[["Regression"]]$data)
 
+  cat("#### Regression Plot\n\n")
+  print(ResultList$elisaResult[["Regression"]]$plot)
+}
 ```
 
 
-### Analysis
-
-```{r, echo=FALSE}
-
+```{r elisa-analysis, echo=FALSE, results='asis'}
 if (!is.null(ResultList$elisaResult[["dataFinal"]])) {
-  finalData <- ResultList$elisaResult[["dataFinal"]]
-  ggplot(finalData, aes(x = Time, y = Quantification, fill = Experiment, group = Experiment)) +
-    geom_bar(position = "dodge", stat = "identity") +
-    theme_bw() +
-    labs(x = "Time", y = "Average quantifications obtained\nfrom the lm", fill = "Experiment", group = "Experiment")
-}
+  cat("### Analysis\n\n")
+  DT::datatable(ResultList$elisaResult[["dataFinal"]])
 
+  # Plotting if dataFinal is not null
+  print(ggplot(ResultList$elisaResult[["dataFinal"]],
+               aes(x = Time, y = Quantification, fill = Experiment, group = Experiment)) +
+        geom_bar(position = "dodge", stat = "identity") +
+        theme_bw() +
+        labs(x = "Time", y = "Average quantifications obtained\n from the lm"))
+}
 ```
 
-## Cytotoxicity
 
-### initial data
-
-```{r, echo=FALSE}
-if (!is.null(ResultList$cytotoxResult[["TablePlot"]])) {
+```{r cytotoxicity-section, echo=FALSE, results='asis'}
+if (!is.null(ResultList$cytotoxResult[["TablePlot"]]) || !is.null(ResultList$cytotoxResult[["data"]])) {
+  cat("## Cytotoxicity\n\n")
+  cat("### Initial Data\n\n")
   DT::datatable(ResultList$cytotoxResult[["TablePlot"]])
-}
-```
 
-### Analysis
-
-```{r, echo=FALSE}
-
-if (!is.null(ResultList$cytotoxResult[["dataFinal"]])) {
-  finalData <- ResultList$cytotoxResult[["dataFinal"]]
-  DT::datatable(finalData)
-  
-  if (!is.null(finalData)) {
-    ggplot(finalData, aes(x = as.factor(EXP), y = Res, fill = SN, col = SN)) +
-      geom_boxplot(alpha = 0.4) +
-      theme_bw() +
-      labs(x = "Experimental condition", y = "% Values w.r.t the baseline cell death", fill = "Sample Name", color = "Sample Name")
+  if (!is.null(ResultList$cytotoxResult[["data"]])) {
+    cat("### Analysis\n\n")
+    print(ggplot(ResultList$cytotoxResult[["data"]],
+                 aes(x = as.factor(EXP), y = Res, fill = SN, col = SN),
+                 alpha = 0.4) +
+          geom_boxplot() +
+          theme_bw() +
+          labs(x = "Experimental condition", y = "% Values w.r.t \nthe baseline cell death",
+               col = "Sample Name", fill = "Sample Name"))
   }
 }
 
 ```
 
 
-## Endocytosis
-
-### Initial data
-
-```{r, echo=FALSE} 
-if (!is.null(ResultList$endocResult[["TablePlot"]])) {
+```{r endocytosis-section, echo=FALSE, results='asis'}
+if (!is.null(ResultList$endocResult[["TablePlot"]]) || !is.null(ResultList$endocResult[["dataFinal"]])) {
+  cat("## Endocytosis\n\n")
+  cat("### Initial Data\n\n")
   DT::datatable(ResultList$endocResult[["TablePlot"]])
+
+  if (!is.null(ResultList$endocResult[["dataFinal"]])) {
+    cat("### Analysis\n\n")
+    DT::datatable(ResultList$endocResult[["dataFinal"]])
+  }
 }
 ```
 
-### Analysis
-```{r, echo=FALSE}    
-if (!is.null(ResultList$endocResult[["dataFinal"]])) {
-  DT::datatable(ResultList$endocResult[["dataFinal"]])
-}
-```
 
-## RT-qPCR
-
-### Initial data
-
-```{r, echo=FALSE}
-if (!is.null(ResultList$pcrResult[["Initdata"]])) {
+```{r rt-qpcr-section, echo=FALSE, results='asis'}
+if (!is.null(ResultList$pcrResult[["Initdata"]]) || !is.null(ResultList$pcrResult[["NewPCR"]])) {
+  cat("## RT-qPCR\n\n")
+  cat("### Initial Data\n\n")
   DT::datatable(ResultList$pcrResult[["Initdata"]])
-}
-```
 
-## Normalization on Housekeeping Genes
-
-```{r, echo=FALSE}
-
-if (!is.null(ResultList$pcrResult[["NewPCR"]])) {
-  DT::datatable(ResultList$pcrResult[["NewPCR"]])
-}
-
-if (!is.null(ResultList$pcrResult[["plotPRC"]])) {
-  print(ResultList$pcrResult[["plotPRC"]])
+  cat("### Normalization on Housekeeping Genes\n\n")
+  if (!is.null(ResultList$pcrResult[["NewPCR"]])) {
+    DT::datatable(ResultList$pcrResult[["NewPCR"]])
+    print(ResultList$pcrResult[["plotPRC"]])
+  }
 }
 
 ```
@@ -146,25 +121,26 @@ if (!is.null(ResultList$pcrResult[["plotPRC"]])) {
 
 <!-- ``` -->
 
-### WB
-
-### Initial data
-
-```{r, echo=FALSE}
-    
-if (!is.null(ResultList$pcrResult[["NewPCR"]])) {
-  DT::datatable(ResultList$pcrResult[["NewPCR"]])
+```{r wb-section, echo=FALSE, results='asis'}
+if (!is.null(ResultList$wbResult[["Im"]])) {
+  cat("## WB\n\n")
+  cat("### Initial Data\n\n")
+  # Assumiamo che ResultList$wbResult[["Im"]] sia un oggetto che contiene i dati dell'immagine
+  # Se ResultList$wbResult[["Im"]] è un percorso file, dovresti caricarlo, o se è un oggetto immagine, usalo direttamente
+  ListIm <- ResultList$wbResult[["Im"]]
+  im <- ListIm$RGB  # Assumendo che ListIm$RGB sia l'immagine pronta da mostrare
+  
+  # Verifica che 'im' sia definito correttamente e non sia null
+  if (!is.null(im)) {
+    plot(c(1, dim(im)[2]), c(1, dim(im)[1]), type = 'n', ann = FALSE)
+    rasterImage(im, 1, 1, dim(im)[2], dim(im)[1])
+  } else {
+    cat("No image data available.\n")
+  }
 }
 
-if (!is.null(ResultList$pcrResult[["plotPRC"]])) {
-  print(ResultList$pcrResult[["plotPRC"]])
-}
-
-```
-
-### Analysis
-```{r, echo=FALSE}   
 if (!is.null(ResultList$wbResult[["Plots"]])) {
+  cat("### Analysis\n\n")
   print(ResultList$wbResult[["Plots"]] + labs(title = "Initial curve"))
 }
 
@@ -176,28 +152,35 @@ if (!is.null(ResultList$wbResult[["AUCdf"]])) {
   DT::datatable(ResultList$wbResult[["AUCdf"]])
 }
 
-
 ```
 
-### WB comparison
+```{r wb-comparison-section, echo=FALSE, results='asis'}
+if (!isEmptyOrNoninformative(ResultList$wbquantResult[["NormWBanalysis_filtered"]]) ||
+    !isEmptyOrNoninformative(ResultList$wbquantResult[["WBanalysis_filtered"]]) ||
+    !isEmptyOrNoninformative(ResultList$wbquantResult[["RelDensitiy"]]) ||
+    !isEmptyOrNoninformative(ResultList$wbquantResult[["AdjRelDensitiy"]])) {
+  cat("## WB Comparison\n\n")
+  
+  cat("### Normalizer WB\n\n")
+  if (!isEmptyOrNoninformative(ResultList$wbquantResult[["NormWBanalysis_filtered"]])) {
+    DT::datatable(ResultList$wbquantResult[["NormWBanalysis_filtered"]])
+  }
+  
+  cat("### WB Analysis\n\n")
+  if (!isEmptyOrNoninformative(ResultList$wbquantResult[["WBanalysis_filtered"]])) {
+    DT::datatable(ResultList$wbquantResult[["WBanalysis_filtered"]])
+  }
 
-### Normalizer WB 
-
-```{r, echo=FALSE}
-if (!is.null(ResultList$wbquantResult[["NormWBanalysis_filtered"]])) {
-  DT::datatable(ResultList$wbquantResult[["NormWBanalysis_filtered"]])
+  cat("### Densities\n\n")
+  if (!isEmptyOrNoninformative(ResultList$wbquantResult[["RelDensitiy"]])) {
+    DT::datatable(ResultList$wbquantResult[["RelDensitiy"]])
+  }
+  
+  if (!isEmptyOrNoninformative(ResultList$wbquantResult[["AdjRelDensitiy"]])) {
+    DT::datatable(ResultList$wbquantResult[["AdjRelDensitiy"]])
+  }
 }
-
-if (!is.null(ResultList$wbquantResult[["WBanalysis_filtered"]])) {
-  DT::datatable(ResultList$wbquantResult[["WBanalysis_filtered"]])
-}
-
-if (!is.null(ResultList$wbquantResult[["RelDensitiy"]])) {
-  DT::datatable(ResultList$wbquantResult[["RelDensitiy"]])
-}
-
-if (!is.null(ResultList$wbquantResult[["AdjRelDensitiy"]])) {
-  DT::datatable(ResultList$wbquantResult[["AdjRelDensitiy"]])
-}
-
 ```
+
+
+

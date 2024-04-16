@@ -329,7 +329,7 @@ server <- function(input, output, session) {
       
       results <- DataAnalysisModule$wbResult
       saveRDS(results, file = tempRdsPath)
-      saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "WB")
+      saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "WB", PanelStructures)
       
       zip(file, files = c(tempRdsPath, tempXlsxPath), flags = "-j")
       manageSpinner(FALSE)
@@ -1460,34 +1460,54 @@ server <- function(input, output, session) {
       "Report.html"
     },
     content = function(file) {
-      parmsList <- list(ResultList = reactiveValuesToList(DataAnalysisModule))
-      anyNotNull <- FALSE
-      
-      # Iteriamo attraverso ogni analisi presente in parmsList
-      for (analysisName in names(parmsList$ResultList)) {
-        analysisData <- parmsList$ResultList[[analysisName]]
-        
-        # Verifichiamo se ci sono valori non nulli nell'analisi corrente
-        if (!all(sapply(analysisData, is.null))) {
-          anyNotNull <- TRUE
-          cat(paste("Analysis with at least one non-null value:", analysisName, "\n"))
-        }
+      if (checkAnalysis()) {
+        showAlert("Error", "no analyzes to download", "error", 5000)
+        return(NULL)
       }
       
-      # Se non ci sono analisi con valori non nulli, mostriamo un messaggio di errore
-      if (!anyNotNull) {
-        showAlert("Error", "no analysis", "error", 5000)
-      } else {
-        # Altrimenti, eseguiamo il download
-        rmarkdown::render(
-          "inst/shiny/report.Rmd",
-          output_file = file,
-          output_format = "html_document",
-          params = parmsList
-        )
-      }
+      manageSpinner(TRUE)
+      parmsList = list(ResultList = reactiveValuesToList(DataAnalysisModule))
+      rmarkdown::render("inst/shiny/report.Rmd",
+                        output_file = file, output_format = "html_document",
+                        params = parmsList)
+      manageSpinner(FALSE)
+      showAlert("Success", "Download completed successfully", "success", 2000)
     }
   )
+  
+  checkAnalysis <- function() {
+    if (!is.null(wbResult$Normalizer) || !is.null(wbResult$Im) || !is.null(wbResult$Planes) ||
+        !is.null(wbResult$TruncatedPanelsValue) || !is.null(wbResult$PanelsValue) ||
+        !is.null(wbResult$Plots) || !is.null(wbResult$TruncatedPlots) || !is.null(wbResult$pl) ||
+        !identical(wbResult$AUCdf, data.frame(SampleName = "-", Truncation = "-", AUC = "-")))
+      return (FALSE)
+    if (!is.null(wbquantResult$NormWBanalysis) || !is.null(wbquantResult$NormWBanalysis_filtered) ||
+        !is.null(wbquantResult$WBanalysis) || !is.null(wbquantResult$WBanalysis_filtered) ||
+        !is.null(wbquantResult$AdjRelDensitiy))
+      return (FALSE)
+    if (!is.null(pcrResult$Initdata) || !is.null(pcrResult$selectPCRcolumns) ||
+        !is.null(pcrResult$data) || !is.null(pcrResult$PCRnorm) || !is.null(pcrResult$NewPCR) ||
+        !is.null(pcrResult$plotPRC))
+      return (FALSE)
+    if (!is.null(elisaResult$Initdata) || !is.null(elisaResult$data) ||
+        !is.null(elisaResult$TablePlot) || !is.null(elisaResult$dataFinal) ||
+        !is.null(elisaResult$ELISAcell_EXP) || !is.null(elisaResult$ELISAcell_SN) ||
+        !is.null(elisaResult$MapBaseline) || !is.null(elisaResult$MapBlank) ||
+        !is.null(elisaResult$Tablestandcurve) || !is.null(elisaResult$Regression))
+      return (FALSE)
+    if (!is.null(cytotoxResult$Initdata) || !is.null(cytotoxResult$data) ||
+        !is.null(cytotoxResult$TablePlot) || !is.null(cytotoxResult$dataFinal) ||
+        !is.null(cytotoxResult$CYTOTOXcell_EXP) || !is.null(cytotoxResult$CYTOTOXcell_REP) ||
+        !is.null(cytotoxResult$CYTOTOXcell_SN) || !is.null(cytotoxResult$MapBaseline))
+      return (FALSE)
+    if (!is.null(endocResult$Initdata) || !is.null(cytotoxResult$data) ||
+        !is.null(endocResult$TablePlot) || !is.null(cytotoxResult$dataFinal) ||
+        !is.null(endocResult$ENDOCcell_TIME) || !is.null(cytotoxResult$ENDOCcell_SN) ||
+        !is.null(endocResult$MapBaseline) || !is.null(cytotoxResult$MapBlank))
+      return (FALSE)
+  
+    return (TRUE)
+  }
   
   # END DOWNLOAD
 }
