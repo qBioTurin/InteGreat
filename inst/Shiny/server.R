@@ -60,7 +60,6 @@ server <- function(input, output, session) {
   )
   
   
-  # save everytime there is a change in the results
   WBresultList <- reactive({
     reactiveValuesToList(wbResult)
   })
@@ -1027,106 +1026,64 @@ server <- function(input, output, session) {
   
   
   observeEvent(input$LoadPCR_Button,{
-    
+    alert$alertContext <- "PCR-reset"
     if( !is.null(pcrResult$Initdata) ) {
-      # If data is already present, show a modal asking for confirmation to update
-      showModal(modalDialog(
+      shinyalert(
         title = "Important message",
-        "Do you want to update the RT-PCR data already present?",
-        easyClose = TRUE,
-        footer= tagList(actionButton("confirmUploadPCR", "Update"),
-                        modalButton("Cancel")
-        )
-      ))
-    } else {
-      mess = readfile(
-        filename = input$PCRImport$datapath,
-        type = "Excel", 
-        isFileUploaded = !is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
-        colname = TRUE, 
-        namesAll = namesAll, 
-        allDouble = FALSE, 
-        colors = FALSE 
+        text = "Do you want to update the WB data already present, by resetting the previous analysis?",
+        type = "warning",
+        showCancelButton = TRUE,
+        confirmButtonText = "Update",
+        cancelButtonText = "Cancel",
       )
-      
-      if (!is.null(mess$message) && mess$call == "") {
-        showAlert("Error", mess$message, "error", 5000)
-      } else {
-        validate(
-          need(!is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
-               "Please select an RT-qPCR excel file!!")
-        )
-        pcrResult$Initdata = mess
-        
-        updateSelectInput(session, "PCR_gene",
-                          choices = c("", colnames(pcrResult$Initdata)),
-                          selected = "")
-        updateSelectInput(session, "PCR_sample",
-                          choices = c("", colnames(pcrResult$Initdata)),
-                          selected = "")
-        updateSelectInput(session, "PCR_value",
-                          choices = c("", colnames(pcrResult$Initdata)),
-                          selected = "")
-        updateSelectInput(session, "PCR_time",
-                          choices = c("", colnames(pcrResult$Initdata)),
-                          selected = "")
-        showAlert("Success", "The RT-qPCR excel has been uploaded with success", "success", 2000)
-      }
+    } else loadExcelFile()
+  })
+  
+  observeEvent(input$shinyalert, {
+    removeModal()
+    if (input$shinyalert && alert$alertContext == "PCR-reset") {  
+      resetPanel("PCR", flags = FlagsPCR, result = pcrResult)
+      loadExcelFile()
     }
   })
   
-  
-  observeEvent(input$confirmUploadPCR,{
+  loadExcelFile <- function() {
+    alert$alertContext
     
-    pcrResult = pcrResult0
+    mess = readfile(
+      filename = input$PCRImport$datapath,
+      type = "Excel", 
+      isFileUploaded = !is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
+      colname = TRUE, 
+      namesAll = namesAll, 
+      allDouble = FALSE, 
+      colors = FALSE 
+    )
     
-    FlagsPCR$norm=F 
-    FlagsPCR$baseline = F
-    
-    output$PCRtables <- renderUI({ NULL })
-    output$PCRtablesComp <- renderUI({ NULL })
-    output$PCRplot <- renderPlot({ NULL })
-    
-    output$LoadingError_PCR <- renderText({
+    if (!is.null(mess$message) && mess$call == "") {
+      showAlert("Error", mess$message, "error", 5000)
+    } else {
       validate(
-        need(!is.null(input$PCRImport) && file.exists(input$PCRImport$datapath) ,
-             "Please select an RT-PCR excel file!!" )
+        need(!is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
+             "Please select an RT-qPCR excel file!!")
       )
-      
-      mess = readfile(
-        filename = input$PCRImport$datapath,
-        type = "Excel"
-      )
-      
-      validate(
-        need(!setequal(names(mess),c("message","call")) ,
-             mess[["message"]])
-      )
-      
       pcrResult$Initdata = mess
       
-      updateSelectInput(session,"PCR_gene",
-                        choices = c("",colnames(pcrResult$Initdata)),
-                        selected = ""
-      )
-      updateSelectInput(session,"PCR_sample",
-                        choices = c("",colnames(pcrResult$Initdata)),
-                        selected = ""
-      )
-      updateSelectInput(session,"PCR_value",
-                        choices = c("",colnames(pcrResult$Initdata)),
-                        selected = ""
-      )
-      updateSelectInput(session,"PCR_time",
-                        choices = c("",colnames(pcrResult$Initdata)),
-                        selected = ""
-      )
-      
-      removeModal()
-      
-      "The RDs has been uploaded  with success"
-    })
-  })
+      updateSelectInput(session, "PCR_gene",
+                        choices = c("", colnames(pcrResult$Initdata)),
+                        selected = "")
+      updateSelectInput(session, "PCR_sample",
+                        choices = c("", colnames(pcrResult$Initdata)),
+                        selected = "")
+      updateSelectInput(session, "PCR_value",
+                        choices = c("", colnames(pcrResult$Initdata)),
+                        selected = "")
+      updateSelectInput(session, "PCR_time",
+                        choices = c("", colnames(pcrResult$Initdata)),
+                        selected = "")
+      showAlert("Success", "The RT-qPCR excel has been uploaded with success", "success", 2000)
+    }
+  }
   
   observeEvent(list(input$PCR_value,input$PCR_gene,input$PCR_sample,input$PCR_time),{
     if( !is.null(pcrResult$Initdata) ){
@@ -1470,6 +1427,22 @@ server <- function(input, output, session) {
       rmarkdown::render("inst/shiny/report.Rmd",
                         output_file = file, output_format = "html_document",
                         params = parmsList)
+      manageSpinner(FALSE)
+      showAlert("Success", "Download completed successfully", "success", 2000)
+    }
+  )
+  
+  output$downloadRDSwholeAnalysis <- downloadHandler(
+    filename = function() {
+      paste('DataIntegrationModuleAnalysis-', Sys.Date(), '.RDs', sep='')
+    },
+    content = function(file) {
+      if (checkAnalysis()) {
+        showAlert("Error", "no analyzes to download", "error", 5000)
+        return(NULL)
+      }
+      manageSpinner(TRUE)
+      saveRDS(reactiveValuesToList(DataAnalysisModule), file = file)
       manageSpinner(FALSE)
       showAlert("Success", "Download completed successfully", "success", 2000)
     }

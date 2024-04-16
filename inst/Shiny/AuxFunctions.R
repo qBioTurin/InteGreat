@@ -11,7 +11,7 @@ manageSpinner <- function(isDownloading) {
   }
 }
 
-resetPanel <- function(type, flags, panelStructures, numberOfPlanes, planeSelected, result, output, panelData, pcrResult = NULL) {
+resetPanel <- function(type, flags = NULL, panelStructures = NULL, numberOfPlanes = NULL, planeSelected = NULL, result, output = NULL, panelData = NULL) {
   switch(type,
          "WB" = {
            flags$ShowTif <- FALSE
@@ -41,13 +41,16 @@ resetPanel <- function(type, flags, panelStructures, numberOfPlanes, planeSelect
            output$plot_AdjRelDens <- renderPlot({})
          },
         "PCR" = {
-           pcrResult$Initdata <- NULL
-           pcrResult$selectPCRcolumns <- NULL
-           pcrResult$data <- NULL
-           pcrResult$PCRnorm <- NULL
-           pcrResult$BaselineExp <- NULL
-           pcrResult$plotPRC <- NULL
-           pcrResult$NewPCR <- NULL
+           flags$norm <- FALSE
+           flags$baseline <- FALSE
+           
+           result$Initdata <- NULL
+           result$selectPCRcolumns <- NULL
+           result$data <- NULL
+           result$PCRnorm <- NULL
+           result$BaselineExp <- NULL
+           result$plotPRC <- NULL
+           result$NewPCR <- NULL
         },
          error = function(cond) {
            showAlert("Error", "an error occured", "error", 5000)
@@ -106,9 +109,7 @@ readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = 
           return(result)
         }
         
-       
       }
-      
       return(result)
     },
     "Excel" = {
