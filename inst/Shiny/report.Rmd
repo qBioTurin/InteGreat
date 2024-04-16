@@ -107,79 +107,65 @@ if (!is.null(ResultList$pcrResult[["Initdata"]]) || !is.null(ResultList$pcrResul
 
 ```
 
-<!-- ### Comp Analysis -->
-
-<!-- ```{r, echo=FALSE} -->
-
-<!-- ResultList$pcrResult[["CompPRC"]] -->
-
-<!-- ggplot(data =  ResultList$pcrResult[["CompPRC"]], -->
-<!--                   aes(x= Gene, y = Qnorm, fill = Sample)) +  -->
-<!--              facet_wrap(~Norm, ncol = 1) + -->
-<!--              geom_bar(stat = "identity",position = "dodge") -->
-
-
-<!-- ``` -->
-
 ```{r wb-section, echo=FALSE, results='asis'}
 if (!is.null(ResultList$wbResult[["Im"]])) {
   cat("## WB\n\n")
   cat("### Initial Data\n\n")
-  # Assumiamo che ResultList$wbResult[["Im"]] sia un oggetto che contiene i dati dell'immagine
-  # Se ResultList$wbResult[["Im"]] è un percorso file, dovresti caricarlo, o se è un oggetto immagine, usalo direttamente
+ 
   ListIm <- ResultList$wbResult[["Im"]]
-  im <- ListIm$RGB  # Assumendo che ListIm$RGB sia l'immagine pronta da mostrare
+  im <- ListIm$RGB  # immagine originale
   
-  # Verifica che 'im' sia definito correttamente e non sia null
   if (!is.null(im)) {
     plot(c(1, dim(im)[2]), c(1, dim(im)[1]), type = 'n', ann = FALSE)
     rasterImage(im, 1, 1, dim(im)[2], dim(im)[1])
+    cat("\n\n") 
   } else {
-    cat("No image data available.\n")
+    cat("No image data available.\n\n")
   }
-}
 
-if (!is.null(ResultList$wbResult[["Plots"]])) {
-  cat("### Analysis\n\n")
-  print(ResultList$wbResult[["Plots"]] + labs(title = "Initial curve"))
-}
-
-if (!is.null(ResultList$wbResult[["TruncatedPlots"]])) {
-  print(ResultList$wbResult[["TruncatedPlots"]] + labs(title = "Truncated curve"))
-}
-
-if (!is.null(ResultList$wbResult[["AUCdf"]])) {
-  DT::datatable(ResultList$wbResult[["AUCdf"]])
+  # Duplica l'immagine per la seconda visualizzazione
+  im2 <- im  # Crea una copia di 'im' per l'uso successivo
+  
+  if (!is.null(PanelStructures$data)) {
+    cat("### WB Image with Protein Bands\n\n")
+    plot(c(1, dim(im2)[2]), c(1, dim(im2)[1]), type = 'n', ann = FALSE)
+    rasterImage(im2, 1, 1, dim(im2)[2], dim(im2)[1])
+    apply(PanelStructures$data, 1, function(r) {
+      rect(r["xmin"], r["ymin"], r["xmax"], r["ymax"], border = "red")
+    })
+    cat("\n\n")
+  }
 }
 
 ```
 
 ```{r wb-comparison-section, echo=FALSE, results='asis'}
-if (!isEmptyOrNoninformative(ResultList$wbquantResult[["NormWBanalysis_filtered"]]) ||
-    !isEmptyOrNoninformative(ResultList$wbquantResult[["WBanalysis_filtered"]]) ||
-    !isEmptyOrNoninformative(ResultList$wbquantResult[["RelDensitiy"]]) ||
-    !isEmptyOrNoninformative(ResultList$wbquantResult[["AdjRelDensitiy"]])) {
+if ((!is.null(ResultList$wbquantResult[["NormWBanalysis_filtered"]]) && nrow(ResultList$wbquantResult[["NormWBanalysis_filtered"]]) > 0) ||
+    (!is.null(ResultList$wbquantResult[["WBanalysis_filtered"]]) && nrow(ResultList$wbquantResult[["WBanalysis_filtered"]]) > 0) ||
+    (!is.null(ResultList$wbquantResult[["RelDensitiy"]]) && nrow(ResultList$wbquantResult[["RelDensitiy"]]) > 0) ||
+    (!is.null(ResultList$wbquantResult[["AdjRelDensitiy"]]) && nrow(ResultList$wbquantResult[["AdjRelDensitiy"]]) > 0)) {
   cat("## WB Comparison\n\n")
   
   cat("### Normalizer WB\n\n")
-  if (!isEmptyOrNoninformative(ResultList$wbquantResult[["NormWBanalysis_filtered"]])) {
+  if (!is.null(ResultList$wbquantResult[["NormWBanalysis_filtered"]]) && nrow(ResultList$wbquantResult[["NormWBanalysis_filtered"]]) > 0) {
     DT::datatable(ResultList$wbquantResult[["NormWBanalysis_filtered"]])
   }
   
   cat("### WB Analysis\n\n")
-  if (!isEmptyOrNoninformative(ResultList$wbquantResult[["WBanalysis_filtered"]])) {
+  if (!is.null(ResultList$wbquantResult[["WBanalysis_filtered"]]) && nrow(ResultList$wbquantResult[["WBanalysis_filtered"]]) > 0) {
     DT::datatable(ResultList$wbquantResult[["WBanalysis_filtered"]])
   }
 
   cat("### Densities\n\n")
-  if (!isEmptyOrNoninformative(ResultList$wbquantResult[["RelDensitiy"]])) {
+  if (!is.null(ResultList$wbquantResult[["RelDensitiy"]]) && nrow(ResultList$wbquantResult[["RelDensitiy"]]) > 0) {
     DT::datatable(ResultList$wbquantResult[["RelDensitiy"]])
   }
   
-  if (!isEmptyOrNoninformative(ResultList$wbquantResult[["AdjRelDensitiy"]])) {
+  if (!is.null(ResultList$wbquantResult[["AdjRelDensitiy"]]) && nrow(ResultList$wbquantResult[["AdjRelDensitiy"]]) > 0) {
     DT::datatable(ResultList$wbquantResult[["AdjRelDensitiy"]])
   }
 }
+
 ```
 
 
