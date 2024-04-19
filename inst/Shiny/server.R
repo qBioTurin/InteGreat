@@ -932,55 +932,6 @@ server <- function(input, output, session) {
     DataAnalysisModule$wbquantResult = reactiveValuesToList(wbquantResult)
   })
   
-  observeEvent(input$loadStatAnalysis_file_Button,{
-    manageSpinner(TRUE)
-    
-    result <- readfile(
-      filename = input$loadStatAnalysis_file$datapath, 
-      type = "RDsMulti",
-      isFileUploaded = !is.null(input$loadStatAnalysis_file)
-    )
-    
-    if (!is.null(result$error)) {
-      showAlert("Error", result$error, "error", 5000)
-      manageSpinner(FALSE)
-      return()
-    }
-    
-    datapaths <- input$loadStatAnalysis_file$datapath
-    for(dpath in 1:length(datapaths)){
-      mess <- readRDS(datapaths[dpath])
-      
-      if(!(all(names(mess) %in% names(DataAnalysisModule)) ||
-           all(names(mess) %in% names(elisaResult)) ||
-           all(names(mess) %in% names(wbquantResult)) || 
-           all(names(mess) %in% names(pcrResult)) ||
-           all(names(mess) %in% names(cytotoxResult)) ||
-           all(names(mess) %in% names(endocResult)))){
-        showAlert("Error", paste(mess[["message"]],"\n The file must be RDs saved through the Data Analysis module."), "error", 5000)
-        manageSpinner(FALSE)
-        return()
-      }
-      
-      DataStatisticModule$Flag <- TRUE
-      
-      if(all(names(mess) %in% names(wbquantResult)) || all(names(mess) %in% names(DataAnalysisModule))){
-        DataStatisticModule$WB[[dpath]] <- mess$AdjRelDensitiy %>% mutate(DataSet = dpath)
-      } else if(all(names(mess) %in% names(pcrResult)) || all(names(mess) %in% names(DataAnalysisModule))){
-        DataAnalysisModule$PRCC[[dpath]]  <- mess
-      } else if(all(names(mess) %in% names(endocResult)) || all(names(mess) %in% names(DataAnalysisModule))){
-        DataAnalysisModule$ENDOC[[dpath]]  <- mess
-      } else if(all(names(mess) %in% names(elisaResult)) || all(names(mess) %in% names(DataAnalysisModule))){
-        DataAnalysisModule$ELISA[[dpath]]  <- mess
-      } else if(all(names(mess) %in% names(cytotoxResult)) || all(names(mess) %in% names(DataAnalysisModule))){
-        DataAnalysisModule$CYTOTOX[[dpath]]  <- mess
-      }
-    }
-    manageSpinner(FALSE)
-    showAlert("Success", "The RDs files have been uploaded with success", "success", 2000)
-    return(NULL)
-  })
-  
   ### End WB analysis ####
   
   #### PCR analysis ####
@@ -1334,7 +1285,55 @@ server <- function(input, output, session) {
       
       DataStatisticModule$Flag = F
     }
+  })
+  
+  observeEvent(input$loadStatAnalysis_file_Button,{
+    manageSpinner(TRUE)
     
+    result <- readfile(
+      filename = input$loadStatAnalysis_file$datapath, 
+      type = "RDsMulti",
+      isFileUploaded = !is.null(input$loadStatAnalysis_file)
+    )
+    
+    if (!is.null(result$error)) {
+      showAlert("Error", result$error, "error", 5000)
+      manageSpinner(FALSE)
+      return()
+    }
+    
+    datapaths <- input$loadStatAnalysis_file$datapath
+    for(dpath in 1:length(datapaths)){
+      mess <- readRDS(datapaths[dpath])
+      
+      if(!(all(names(mess) %in% names(DataAnalysisModule)) ||
+           all(names(mess) %in% names(elisaResult)) ||
+           all(names(mess) %in% names(wbquantResult)) || 
+           all(names(mess) %in% names(pcrResult)) ||
+           all(names(mess) %in% names(cytotoxResult)) ||
+           all(names(mess) %in% names(endocResult)))){
+        showAlert("Error", paste(mess[["message"]],"\n The file must be RDs saved through the Data Analysis module."), "error", 5000)
+        manageSpinner(FALSE)
+        return()
+      }
+      
+      DataStatisticModule$Flag <- TRUE
+      
+      if(all(names(mess) %in% names(wbquantResult)) || all(names(mess) %in% names(DataAnalysisModule))){
+        DataStatisticModule$WB[[dpath]] <- mess$AdjRelDensitiy %>% mutate(DataSet = dpath)
+      } else if(all(names(mess) %in% names(pcrResult)) || all(names(mess) %in% names(DataAnalysisModule))){
+        DataAnalysisModule$PRCC[[dpath]]  <- mess
+      } else if(all(names(mess) %in% names(endocResult)) || all(names(mess) %in% names(DataAnalysisModule))){
+        DataAnalysisModule$ENDOC[[dpath]]  <- mess
+      } else if(all(names(mess) %in% names(elisaResult)) || all(names(mess) %in% names(DataAnalysisModule))){
+        DataAnalysisModule$ELISA[[dpath]]  <- mess
+      } else if(all(names(mess) %in% names(cytotoxResult)) || all(names(mess) %in% names(DataAnalysisModule))){
+        DataAnalysisModule$CYTOTOX[[dpath]]  <- mess
+      }
+    }
+    manageSpinner(FALSE)
+    showAlert("Success", "The RDs files have been uploaded with success", "success", 2000)
+    return(NULL)
   })
   
   observeEvent(input$StatAnalysis, {
@@ -1348,30 +1347,30 @@ server <- function(input, output, session) {
       if (input$StatAnalysis == "WB") {
         res = results %>%
           select(DataSet, SampleName, AdjRelDens) %>%
-          mutate(SampleName = gsub(pattern = "^[0-9]. ", x = SampleName, replacement = ""))
+          mutate(SampleName = gsub(pattern = "^[0-9]. ", x = SampleName, replacement = ""),
+                 ColorSet = as.character(DataSet))  # Assicurati che ColorSet sia una colonna separata e non sovrascritta
         
-        # Usa pivot_longer invece di gather
-        dati_punti = res %>% 
-          tidyr::pivot_longer(cols = -SampleName, names_to = "DataSet", values_to = "AdjRelDens") %>% 
+        # Non usare pivot_longer su DataSet o ColorSet
+        points = res %>%
           mutate(SampleName = as.factor(SampleName))
         
-        # Calcola media e sd per ogni SampleName
-        stats = dati_punti %>%
+        stats = points %>%
           group_by(SampleName) %>%
-          summarise(Mean = mean(AdjRelDens), Sd = sd(AdjRelDens))
+          summarise(Mean = mean(AdjRelDens), Sd = sd(AdjRelDens), .groups = 'drop')
         
         resplot = ggplot(stats, aes(x = SampleName, y = Mean)) + 
           geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
           geom_errorbar(aes(ymin=Mean-Sd, ymax=Mean+Sd), width=.2, position=position_dodge(.9)) +
-          geom_point(data = dati_punti, aes(x = SampleName, y = AdjRelDens), position = position_jitter(width = 0.2), color = "red") +
+          geom_point(data = points, aes(x = SampleName, y = AdjRelDens, color = ColorSet), position = position_jitter(width = 0.2), size = 3) +
           theme_bw()
       }
       
-      output$TabStat = renderDT({stats}) # Assicurati che stats sia il dataframe che vuoi mostrare
+      output$TabStat = renderDT({stats})
       output$PlotStat = renderPlot({resplot})
       output$TabTTest = renderDT({resTTest})
     }
   })
+  
   
   
   ### End Statistic ####
