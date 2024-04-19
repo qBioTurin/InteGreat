@@ -1,5 +1,6 @@
 library(shinydashboard)
 library(shiny)
+library(shinyjs)
 library(shinyalert)
 library(shinybusy)
 library(zoo)
@@ -84,19 +85,24 @@ ui <- dashboardPage(
       ),
       tabItem(tabName = "LoadAnalysis",
               h2("Load analysis"),
-              box(
-                width = 12,
                 fluidRow(
                   column(
-                    10,
-                    fileInput(inputId = "loadAnalysis_file", label = "", placeholder = "Select the RDs files storing ORCA analyses", width = "80%", multiple = TRUE)
+                    9,
+                    fileInput(inputId = "loadAnalysis_file", 
+                              label = "", 
+                              placeholder = "Select the RDs files storing ORCA analyses", 
+                              width = "80%", 
+                              multiple = TRUE)
                   ),
                   column(
-                    1,
-                    actionButton(label = "Load", style = "margin-top: 20px;", icon = shiny::icon("upload"), inputId = "loadAnalysis_Button")
+                    2,
+                    actionButton(label = "Load", 
+                                 style = "margin-top: 20px;  width: 100%;", 
+                                 icon = shiny::icon("upload"), 
+                                 inputId = "loadAnalysis_Button")
                   )
                 ),
-              )
+              tags$style(type='text/css', "#loadAnalysis_Button { width:100%; margin-top: 20px;}")
       ),
       tabItem(tabName = "uploadIm",
               h2("Upload Image"),
@@ -447,6 +453,135 @@ ui <- dashboardPage(
               )
       ),
       ## END data analysis:  RT-PCR 
+      
+      ## START data analysis:  endocytosis
+      tabItem(
+        tabName = "uploadENDOC",
+        h2("Load Endocytosis data"),
+            fluidRow(
+              column(
+                9,
+                fileInput(
+                  inputId = "ENDOCImport",
+                  label = "",
+                  placeholder = "Select an Excel file.",
+                  width = "80%", 
+                  multiple = TRUE
+                )
+              ),
+              column(2,
+                     actionButton(
+                       label = "Load",
+                       style = "margin-top: 20px; width: 100%;",
+                       icon = shiny::icon("upload"),
+                       inputId = "LoadENDOC_Button"
+                     )
+              ),
+              tags$style(type='text/css', "#loadAnalysis_Button { width:100%; margin-top: 20px;}")
+            ),
+            fluidRow(
+              column(
+                width = 10,offset = 1,
+                verbatimTextOutput("LoadingError_ENDOC")
+              )
+        ),
+        fluidRow(
+          box(width = 12,
+              title = "Assign experimental information to values:",
+              column(width = 6,
+                     dataTableOutput("ENDOCmatrix")
+              ),
+              column(width = 6,
+                     fluidRow(
+                       column(width = 4, 
+                              pickerInput(inputId = "colorDropdown",
+                                          label = "Choose a color:",
+                                          choices = "",
+                                          options = list(`style` = "")
+                              )
+                       ),
+                       column(width = 8, 
+                               textInput("inputTextENDOC", 
+                                         "cell name", 
+                                         value = "")
+                              )
+                      ),
+                     selectizeInput("ENDOCcell_SN",
+                                    label = "Experimental condition:",
+                                    choices = "",
+                                    options = list(create = TRUE)),
+                     selectizeInput("ENDOCcell_TIME",label = "Time:",
+                                    choices = "",
+                                    options = list(create = TRUE)),
+                     fluidRow(
+                       column(6,
+                              checkboxGroupInput(inputId = "ENDOC_baselines",
+                                                 "Select baselines:")
+                       ),
+                       column(6,
+                              checkboxGroupInput(inputId = "ENDOC_blanks",
+                                                 "Select blank:")
+                       )
+                     )
+              ),
+              fluidRow(
+                column(width = 1,offset = 9,
+                       actionButton(inputId = "NextEndocQuantif",
+                                    label = 'Proceed to Quantification',
+                                    align = "right",
+                                    icon = shiny::icon("forward"))
+                )
+              )
+          ),
+          plotOutput("ENDOCinitplots")
+        )
+      ),
+      # Second tab content
+      tabItem(tabName = "tablesENDOC",
+              h2("Quantification"),
+              fluidRow(
+                tags$head(tags$script(src = "message-handler.js")),
+                box(width= 12,
+                    title = "Select a blank for the following experimental conditions",
+                    collapsible = TRUE,
+                    collapsed = FALSE,
+                    h4("If time information is associated with the experimental conditions
+                       defined as blank, then it will be lost during the averaging of its values."),
+                    uiOutput("EndocBlankSelection")
+                ),
+                box(width= 12,
+                    title = "Select a baseline for the following experimental conditions",
+                    collapsible = TRUE,
+                    collapsed = FALSE,
+                    uiOutput("EndocBaselineSelection")
+                ),
+                box(width= 12,
+                    title = "Quantification",
+                    collapsible = TRUE,
+                    collapsed = TRUE,
+                    DTOutput("ENDOCtables"),
+                    plotOutput("ENDOCplots"),
+                    fluidRow(
+                      column(width = 1,offset = 9,
+                             downloadButton( label = "Download the RDs", 
+                                             outputId = "downloadButton_ENDOC",
+                                             #href = "Results.RData",
+                                             #download = "Results.RData",
+                                             icon = icon("download") )
+                      ),
+                      column(width = 1,offset = 7,
+                             downloadButton( label = "Download xlsx", 
+                                             outputId = "downloadButtonExcel_ENDOC",
+                                             #href = "Results.RData",
+                                             #download = "Results.RData",
+                                             icon = icon("download") )
+                      )
+                    )
+                )
+              )
+      ),
+      
+      ## END data analysis: ENDOC
       
       #start statistical analysis
       tabItem(tabName = "StatAnalysis_tab",

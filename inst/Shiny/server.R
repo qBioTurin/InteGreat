@@ -987,7 +987,7 @@ server <- function(input, output, session) {
         confirmButtonText = "Update",
         cancelButtonText = "Cancel",
       )
-    } else loadExcelFile()
+    } else loadExcelFilePCR()
   })
   
   observeEvent(input$shinyalert, {
@@ -998,17 +998,17 @@ server <- function(input, output, session) {
     }
   })
   
-  loadExcelFile <- function() {
-    alert$alertContext
+  loadExcelFilePCR <- function() {
+    alert$alertContext <- ""
     
     mess = readfile(
       filename = input$PCRImport$datapath,
       type = "Excel", 
       isFileUploaded = !is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
-      colname = TRUE, 
+      colname = FALSE, 
       namesAll = namesAll, 
-      allDouble = FALSE, 
-      colors = FALSE 
+      allDouble = TRUE, 
+      colors = TRUE 
     )
     
     if (!is.null(mess$message) && mess$call == "") {
@@ -1255,6 +1255,141 @@ server <- function(input, output, session) {
   
   #### END PCR analysis ####
   
+  #### ENDOCYTOSIS analysis ####
+  observeEvent(input$NextEndocQuantif,{
+    updateTabsetPanel(session, "SideTabs",
+                      selected = "tablesENDOC")
+  })
+  
+  endocResult = reactiveValues(
+    Initdata= NULL,
+    data = NULL,
+    TablePlot = NULL,
+    dataFinal = NULL,
+    ENDOCcell_TIME = NULL,
+    ENDOCcell_SN = NULL,
+    MapBaseline = NULL,
+    MapBlank = NULL)
+  
+  endocResult0 = list(
+    Initdata= NULL,
+    data = NULL,
+    TablePlot = NULL,
+    dataFinal = NULL,
+    ENDOCcell_TIME = NULL,
+    ENDOCcell_SN = NULL,
+    MapBaseline = NULL,
+    MapBlank = NULL)
+  
+  # save everytime there is a change in the results
+  ENDOCresultListen <- reactive({
+    reactiveValuesToList(endocResult)
+  })
+  observeEvent(ENDOCresultListen(), {
+    DataAnalysisModule$endocResult = reactiveValuesToList(endocResult)
+    DataAnalysisModule$endocResult$Flags = reactiveValuesToList(FlagsENDOC)
+  })
+  
+  ##
+  FlagsENDOC <- reactiveValues(cellCoo = NULL,
+                               AllExp = "",
+                               BASEselected = "",
+                               BLANCHEselected = "",
+                               EXPselected = "",
+                               EXPcol = NULL)
+  
+  observeEvent(input$LoadENDOC_Button,{
+    alert$alertContext <- "ENDOC-reset"
+    if( !is.null(endocResult$Initdata) ) {
+      shinyalert(
+        title = "Important message",
+        text = "Do you want to update the WB data already present, by resetting the previous analysis?",
+        type = "warning",
+        showCancelButton = TRUE,
+        confirmButtonText = "Update",
+        cancelButtonText = "Cancel",
+      )
+    } else loadExcelFileENDOC()
+  })
+  
+  observeEvent(input$shinyalert, {
+    removeModal()
+    if (input$shinyalert && alert$alertContext == "ENDOC-reset") {  
+      resetPanel("ENDOC", flags = FlagsENDOC, result = endocResult)
+      loadExcelFileENDOC()
+    }
+  })
+  
+  loadExcelFileENDOC <- function() {
+    alert$alertContext <- ""
+  
+    for(nameList in names(endocResult0)) 
+      endocResult[[nameList]] <- endocResult0[[nameList]]
+  
+      mess = readfile(
+        filename = input$ENDOCImport$datapath,
+        isFileUploaded = !is.null(input$ENDOCImport) && file.exists(input$ENDOCImport$datapath),
+        type = "Excel",
+        allDouble = T,
+        colname = F,
+        colors = T,
+        
+      )
+      
+      if(setequal(names(mess), c("message", "call"))) {
+        showAlert("Error", mess[["message"]], "error", 5000)
+      } else {
+        endocResult$Initdata = mess$x
+        FlagsENDOC$EXPcol = mess$fill
+        endocResult$ENDOCcell_SN = mess$SNtable
+        
+        removeModal()
+        loadEndocColor()
+        showAlert("Success", "The RDs has been uploaded  with success", "success", 2000)
+      }
+  }
+  
+  loadEndocColor <- function() {
+    observe({
+      colors <- FlagsENDOC$EXPcol
+      choices <- rep("", length(colors))
+      
+      updatePickerInput(session, "colorDropdown",
+                        choices = colors,
+                        options = list(`style` = "width: 100px;"),
+                        choicesOpt = list(
+                          elementId = paste0("color-", colors),
+                          style = paste0("background-color: ", colors, ";")
+                        ),
+                        selected = NULL
+      )
+    })
+    
+    observeEvent(input$colorDropdown, {
+      selected_color_id <- input$colorDropdown
+      
+      if (!is.null(selected_color_id)) {
+        selected_color <- gsub("^color-", "", selected_color_id)
+        
+        print(paste("Selected color:", selected_color))
+      }
+    })
+  }
+  
+  
+  observe({
+    if( !is.null(endocResult$Initdata) && is.null(endocResult$TablePlot) ){
+      
+      tableExcelColored(session = session,
+                        Result = endocResult, 
+                        FlagsExp = FlagsENDOC,
+                        type = "Initialize")
+      
+      output$ENDOCmatrix <-renderDataTable({endocResult$TablePlot})
+    }
+  })
+  
+  #### END endocytosis ####
   
   #start statistics
   DataStatisticModule = reactiveValues(WB = list(),
@@ -1344,34 +1479,33 @@ server <- function(input, output, session) {
       res = resTTest = NULL
       resplot = ggplot()
       
-      if (input$StatAnalysis == "WB") {
-        res = results %>%
-          select(DataSet, SampleName, AdjRelDens) %>%
-          mutate(SampleName = gsub(pattern = "^[0-9]. ", x = SampleName, replacement = ""),
-                 ColorSet = as.character(DataSet))  # Assicurati che ColorSet sia una colonna separata e non sovrascritta
-        
-        # Non usare pivot_longer su DataSet o ColorSet
-        points = res %>%
-          mutate(SampleName = as.factor(SampleName))
-        
-        stats = points %>%
-          group_by(SampleName) %>%
-          summarise(Mean = mean(AdjRelDens), Sd = sd(AdjRelDens), .groups = 'drop')
-        
-        resplot = ggplot(stats, aes(x = SampleName, y = Mean)) + 
-          geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
-          geom_errorbar(aes(ymin=Mean-Sd, ymax=Mean+Sd), width=.2, position=position_dodge(.9)) +
-          geom_point(data = points, aes(x = SampleName, y = AdjRelDens, color = ColorSet), position = position_jitter(width = 0.2), size = 3) +
-          theme_bw()
-      }
+      switch(input$StatAnalysis, 
+          "WB" =  {
+          res = results %>%
+            select(DataSet, SampleName, AdjRelDens) %>%
+            mutate(SampleName = gsub(pattern = "^[0-9]. ", x = SampleName, replacement = ""),
+                   ColorSet = as.character(DataSet)) 
+          
+          points = res %>%
+            mutate(SampleName = as.factor(SampleName))
+          
+          stats = points %>%
+            group_by(SampleName) %>%
+            summarise(Mean = mean(AdjRelDens), Sd = sd(AdjRelDens), .groups = 'drop')
+          
+          resplot = ggplot(stats, aes(x = SampleName, y = Mean)) + 
+            geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
+            geom_errorbar(aes(ymin=Mean-Sd, ymax=Mean+Sd), width=.2, position=position_dodge(.9)) +
+            geom_point(data = points, aes(x = SampleName, y = AdjRelDens, color = ColorSet), position = position_jitter(width = 0.2), size = 3) +
+            theme_bw()
+        }
+      )
       
       output$TabStat = renderDT({stats})
       output$PlotStat = renderPlot({resplot})
       output$TabTTest = renderDT({resTTest})
     }
   })
-  
-  
   
   ### End Statistic ####
   
@@ -1399,16 +1533,6 @@ server <- function(input, output, session) {
     CYTOTOXcell_REP = NULL,
     CYTOTOXcell_SN = NULL,
     MapBaseline = NULL)
-  
-  endocResult = reactiveValues(
-    Initdata= NULL,
-    data = NULL,
-    TablePlot = NULL,
-    dataFinal = NULL,
-    ENDOCcell_TIME = NULL,
-    ENDOCcell_SN = NULL,
-    MapBaseline = NULL,
-    MapBlank = NULL)
   
   # DOWNLOAD REPORT E RDS
   output$downloadReport <- downloadHandler(
