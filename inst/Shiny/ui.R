@@ -15,11 +15,7 @@ library(openxlsx)
 library(patchwork)
 
 ui <- dashboardPage(
-  tags$head(
-    tags$script(src = "https://code.jquery.com/jquery-3.6.0.min.js")
-  )
-  ,
-    dashboardHeader(title = "ORCA",
+ dashboardHeader(title = "ORCA",
                   tags$li(a(onclick = "window.open('https://github.com/qBioTurin/ORCA')",
                             href = NULL,
                             icon("github"),
@@ -497,6 +493,11 @@ ui <- dashboardPage(
               ),
               column(width = 6,
                      fluidRow(
+                       column(width = 8,
+                              textOutput("ENDOCSelectedValues") # Output che può essere aggiornato dal server
+                       )
+                     ),
+                     fluidRow(
                        column(width = 4, 
                               pickerInput(inputId = "colorDropdown",
                                           label = "Choose a color:",
@@ -519,14 +520,14 @@ ui <- dashboardPage(
                                 }
                             "))
                           )
-                       ),
+                       ,
                         column(width = 8, 
                               selectizeInput("ENDOCcell_SN",
                                              label = "Experimental condition:",
                                              choices = "",
                                              options = list(create = TRUE)),
                               )
-                      ),
+                     ),
                      selectizeInput("ENDOCcell_TIME",label = "Time:",
                                     choices = "",
                                     options = list(create = TRUE)),

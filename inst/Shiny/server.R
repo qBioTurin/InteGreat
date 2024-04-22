@@ -1385,6 +1385,7 @@ server <- function(input, output, session) {
       color_names <- names(FlagsENDOC$EXPcol)
       color_codes <- FlagsENDOC$EXPcol
       
+      print(FlagsENDOC$InitData)
       # Escludi il colore con valore "selected"
       selected_color_index <- which(color_names == "selected")
       if (length(selected_color_index) > 0) {
@@ -1406,48 +1407,50 @@ server <- function(input, output, session) {
                         ),
                         selected = NULL
       )
+     
     })
   }
   
+ 
   observeEvent(input$colorDropdown, {
-    req(input$colorDropdown)  
+    req(input$colorDropdown)
     
     selectedColorName <- input$colorDropdown
     whiteKey <- names(FlagsENDOC$EXPcol)[FlagsENDOC$EXPcol == "white"]
-
-    if (selectedColorName != whiteKey) {
-      if (exists("originalColor") && originalColor != "" && any(endocResult$ENDOCcell_SN == "selected")) {
-        originalIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
-        if (length(originalIndices) > 0) {
-          for (idx in 1:nrow(originalIndices)) {
-            endocResult$ENDOCcell_SN[originalIndices[idx, "row"], originalIndices[idx, "col"]] <- originalColor
-          }
+    
+    if (exists("originalColor") && originalColor != "" && any(endocResult$ENDOCcell_SN == "selected")) {
+      originalIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
+      if (length(originalIndices) > 0) {
+        for (idx in 1:nrow(originalIndices)) {
+          endocResult$ENDOCcell_SN[originalIndices[idx, "row"], originalIndices[idx, "col"]] <- originalColor
+          print(paste("Restoring color at", originalIndices[idx, "row"], originalIndices[idx, "col"], "to", originalColor))
         }
       }
+    }
+    
+    if (selectedColorName != "white" && selectedColorName != "#FFFFFF" && selectedColorName != whiteKey) {
+      matchingIndices <- which(endocResult$ENDOCcell_SN == selectedColorName, arr.ind = TRUE)
       
-      if (selectedColorName != "white" && selectedColorName != "#FFFFFF") {
-        matchingIndices <- which(endocResult$ENDOCcell_SN == selectedColorName, arr.ind = TRUE)
+      if (length(matchingIndices) > 0) {
+        firstMatchIndex <- matchingIndices[1,]
+        originalColor <<- endocResult$ENDOCcell_SN[firstMatchIndex[1], firstMatchIndex[2]]
         
-        if (length(matchingIndices) > 0) {
-          firstMatchIndex <- matchingIndices[1,]
-          originalColor <<- endocResult$ENDOCcell_SN[firstMatchIndex[1], firstMatchIndex[2]]
-          
-          for (idx in 1:nrow(matchingIndices)) {
-            endocResult$ENDOCcell_SN[matchingIndices[idx, "row"], matchingIndices[idx, "col"]] <- "selected"
-          }
-          print(endocResult$ENDOCcell_SN)
-          endocResult$TablePlot <- NULL  
-          
-          invalidateLater(1000, session) 
-        } else {
-          print("Nessuna cella corrisponde al colore selezionato.")
+        selectedValues <- c()
+        
+        for (idx in 1:nrow(matchingIndices)) {
+          endocResult$ENDOCcell_SN[matchingIndices[idx, "row"], matchingIndices[idx, "col"]] <- "selected"
+          selectedValues <- c(selectedValues, toString(endocResult$initData[matchingIndices[idx, "row"], ]))
+          print(paste("Selected value added:", endocResult$initData[matchingIndices[idx, "row"], ]))
         }
-      } else {
-        print("Il colore selezionato è bianco. Nessun marking 'selected' sarà applicato.")
+        
+        output$ENDOCSelectedValues <- renderText({
+          paste("Selected Values:", paste(selectedValues, collapse=", "))
+        })
+        
+        invalidateLater(1000, session)
       }
     }
   })
-  
   
   observeEvent(input$ENDOCmatrix_cell_clicked,{
     if(length(input$ENDOCmatrix_cell_clicked)!=0){
