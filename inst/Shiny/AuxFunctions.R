@@ -52,6 +52,23 @@ resetPanel <- function(type, flags = NULL, panelStructures = NULL, numberOfPlane
            result$plotPRC <- NULL
            result$NewPCR <- NULL
         },
+        "ENDOC" = {
+           result$Initdata <- NULL
+           result$data <- NULL
+           result$TablePlot <- NULL
+           result$dataFinal <- NULL
+           result$ENDOCcell_TIME <- NULL
+           result$ENDOCcell_SN <- NULL
+           result$MapBaseline <- NULL
+           result$MapBlank <- NULL
+           
+           flags$cellCoo <- NULL
+           flags$AllExp <- NULL
+           flags$BASEselected <- NULL
+           flags$BLANCHEselected <- NULL
+           flags$EXPselected <- NULL
+           flags$EXPcol <- NULL
+        },
          error = function(cond) {
            showAlert("Error", "an error occured", "error", 5000)
          }

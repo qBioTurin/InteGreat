@@ -102,6 +102,8 @@ server <- function(input, output, session) {
                  PlaneSelected, 
                  wbResult, 
                  output, PanelData)
+      updateSelectInput(session, "LaneChoice", choices = "")
+    
       loadTifFile()
     }
   })
