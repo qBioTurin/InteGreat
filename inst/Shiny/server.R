@@ -1343,8 +1343,10 @@ server <- function(input, output, session) {
       } else {
         endocResult$Initdata = mess$x
         FlagsENDOC$EXPcol = mess$fill
+        FlagsENDOC$EXPcol$selected <- "#00ff00"
         endocResult$ENDOCcell_SN = mess$SNtable
         
+        print(FlagsENDOC$EXPcol)
         removeModal()
         loadEndocColor()
         showAlert("Success", "The RDs has been uploaded  with success", "success", 2000)
@@ -1352,14 +1354,29 @@ server <- function(input, output, session) {
   }
   
   observe({
-    if( !is.null(endocResult$Initdata) && is.null(endocResult$TablePlot) ){
+    if (!is.null(endocResult$Initdata) && is.null(endocResult$TablePlot)) {
       
       tableExcelColored(session = session,
                         Result = endocResult, 
                         FlagsExp = FlagsENDOC,
                         type = "Initialize")
       
-      output$ENDOCmatrix <-renderDataTable({endocResult$TablePlot})
+      output$ENDOCmatrix <- renderDT({
+        datatable(endocResult$TablePlot, options = list(
+          initComplete = JS(
+            "function(settings, json) {",
+            "  console.log('DataTable initialized.');",
+            "  $(this.api().table().body()).find('td').each(function(){",
+            "    console.log('Cell text:', $(this).text());",
+            "    if($(this).text() === 'selected') {",
+            "      console.log('Selected found.');",
+            "      $(this).css({'border': '2px solid red'});",
+            "    }",
+            "  });",
+            "}"
+          )
+        ))
+      }, escape = FALSE)
     }
   })
   
@@ -1367,6 +1384,13 @@ server <- function(input, output, session) {
     observe({
       color_names <- names(FlagsENDOC$EXPcol)
       color_codes <- FlagsENDOC$EXPcol
+      
+      # Escludi il colore con valore "selected"
+      selected_color_index <- which(color_names == "selected")
+      if (length(selected_color_index) > 0) {
+        color_names <- color_names[-selected_color_index]
+        color_codes <- color_codes[-selected_color_index]
+      }
       
       color_styles <- sapply(color_codes, function(color_code) {
         text_color <- if (grepl("^(#FFFFFF|#FFC000|#FFFF00|#D6D6D6|#EBEBEB)", color_code, ignore.case = TRUE)) "#000000" else "#FFFFFF"
@@ -1386,31 +1410,44 @@ server <- function(input, output, session) {
   }
   
   observeEvent(input$colorDropdown, {
-      endocResult$tempStyles <- endocResult$ENDOCcell_SN
-      req(input$colorDropdown)
-      
-      selectedColorName <- input$colorDropdown
-      matchingIndices <- which(endocResult$ENDOCcell_SN == selectedColorName, arr.ind = TRUE)
-      
-      if (length(matchingIndices) > 0) {
-        endocResult$tempStyles[,] <- "" 
-        rows <- matchingIndices[, "row"]
-        cols <- matchingIndices[, "col"]
-        endocResult$tempStyles[cbind(rows, cols)] <- "lightblue"  # Applica stili temporanei
-      } else {
-        endocResult$tempStyles[,] <- ""  # Resetta gli stili se non ci sono corrispondenze
+    req(input$colorDropdown)  
+    
+    selectedColorName <- input$colorDropdown
+    whiteKey <- names(FlagsENDOC$EXPcol)[FlagsENDOC$EXPcol == "white"]
+
+    if (selectedColorName != whiteKey) {
+      if (exists("originalColor") && originalColor != "" && any(endocResult$ENDOCcell_SN == "selected")) {
+        originalIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
+        if (length(originalIndices) > 0) {
+          for (idx in 1:nrow(originalIndices)) {
+            endocResult$ENDOCcell_SN[originalIndices[idx, "row"], originalIndices[idx, "col"]] <- originalColor
+          }
+        }
       }
       
-      output$data_table <- renderDataTable({
-        req(endocResult$Initdata)
-        datatable(endocResult$Initdata, options = list(pageLength = 25, autoWidth = TRUE)) %>%
-          formatStyle(
-            columns = colnames(endocResult$Initdata),
-            valueColumns = colnames(endocResult$Initdata),
-            backgroundColor = styleEqual("lightblue", endocResult$tempStyles)
-          )
-      })
+      if (selectedColorName != "white" && selectedColorName != "#FFFFFF") {
+        matchingIndices <- which(endocResult$ENDOCcell_SN == selectedColorName, arr.ind = TRUE)
+        
+        if (length(matchingIndices) > 0) {
+          firstMatchIndex <- matchingIndices[1,]
+          originalColor <<- endocResult$ENDOCcell_SN[firstMatchIndex[1], firstMatchIndex[2]]
+          
+          for (idx in 1:nrow(matchingIndices)) {
+            endocResult$ENDOCcell_SN[matchingIndices[idx, "row"], matchingIndices[idx, "col"]] <- "selected"
+          }
+          print(endocResult$ENDOCcell_SN)
+          endocResult$TablePlot <- NULL  
+          
+          invalidateLater(1000, session) 
+        } else {
+          print("Nessuna cella corrisponde al colore selezionato.")
+        }
+      } else {
+        print("Il colore selezionato è bianco. Nessun marking 'selected' sarà applicato.")
+      }
+    }
   })
+  
   
   observeEvent(input$ENDOCmatrix_cell_clicked,{
     if(length(input$ENDOCmatrix_cell_clicked)!=0){

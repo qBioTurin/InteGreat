@@ -15,6 +15,10 @@ library(openxlsx)
 library(patchwork)
 
 ui <- dashboardPage(
+  tags$head(
+    tags$script(src = "https://code.jquery.com/jquery-3.6.0.min.js")
+  )
+  ,
     dashboardHeader(title = "ORCA",
                   tags$li(a(onclick = "window.open('https://github.com/qBioTurin/ORCA')",
                             href = NULL,
@@ -497,10 +501,26 @@ ui <- dashboardPage(
                               pickerInput(inputId = "colorDropdown",
                                           label = "Choose a color:",
                                           choices = "",
-                                          options = list(`style` = "")
-                              )
+                                          options = list(style = "background-color: #00ff00; color: black;")
+                              ), 
+                              tags$style(HTML("
+                                #colorDropdown .btn.dropdown-toggle {
+                                    background-color: #00ff00;
+                                    color: black;
+                                }
+                                #colorDropdown .btn.dropdown-toggle:focus, 
+                                #colorDropdown .btn.dropdown-toggle:hover {
+                                    background-color: #00ff00;
+                                    color: black;
+                                    box-shadow: none;
+                                }
+                                #colorDropdown .filter-option-inner-inner {
+                                    color: black;
+                                }
+                            "))
+                          )
                        ),
-                       column(width = 8, 
+                        column(width = 8, 
                               selectizeInput("ENDOCcell_SN",
                                              label = "Experimental condition:",
                                              choices = "",
