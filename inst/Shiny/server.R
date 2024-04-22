@@ -1346,7 +1346,6 @@ server <- function(input, output, session) {
         FlagsENDOC$EXPcol$selected <- "#00ff00"
         endocResult$ENDOCcell_SN = mess$SNtable
         
-        print(FlagsENDOC$EXPcol)
         removeModal()
         loadEndocColor()
         showAlert("Success", "The RDs has been uploaded  with success", "success", 2000)
@@ -1385,8 +1384,6 @@ server <- function(input, output, session) {
       color_names <- names(FlagsENDOC$EXPcol)
       color_codes <- FlagsENDOC$EXPcol
       
-      print(FlagsENDOC$InitData)
-      # Escludi il colore con valore "selected"
       selected_color_index <- which(color_names == "selected")
       if (length(selected_color_index) > 0) {
         color_names <- color_names[-selected_color_index]
@@ -1411,19 +1408,24 @@ server <- function(input, output, session) {
     })
   }
   
- 
   observeEvent(input$colorDropdown, {
     req(input$colorDropdown)
     
     selectedColorName <- input$colorDropdown
-    whiteKey <- names(FlagsENDOC$EXPcol)[FlagsENDOC$EXPcol == "white"]
+    print(paste("Selected Color Name:", selectedColorName))  # Debug
     
+    whiteKey <- names(FlagsENDOC$EXPcol)[FlagsENDOC$EXPcol == "white"]
+    print(paste("White Key:", whiteKey))  # Debug
+    
+    # Ripristino del colore originale
     if (exists("originalColor") && originalColor != "" && any(endocResult$ENDOCcell_SN == "selected")) {
       originalIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
+      print(paste("Original Indices:", toString(originalIndices)))  # Debug
+      
       if (length(originalIndices) > 0) {
         for (idx in 1:nrow(originalIndices)) {
           endocResult$ENDOCcell_SN[originalIndices[idx, "row"], originalIndices[idx, "col"]] <- originalColor
-          print(paste("Restoring color at", originalIndices[idx, "row"], originalIndices[idx, "col"], "to", originalColor))
+          print(paste("Restoring color at row:", originalIndices[idx, "row"], "col:", originalIndices[idx, "col"], "to", originalColor))  # Debug
         }
       }
     }
@@ -1431,24 +1433,28 @@ server <- function(input, output, session) {
     if (selectedColorName != "white" && selectedColorName != "#FFFFFF" && selectedColorName != whiteKey) {
       matchingIndices <- which(endocResult$ENDOCcell_SN == selectedColorName, arr.ind = TRUE)
       
-      if (length(matchingIndices) > 0) {
-        firstMatchIndex <- matchingIndices[1,]
-        originalColor <<- endocResult$ENDOCcell_SN[firstMatchIndex[1], firstMatchIndex[2]]
-        
-        selectedValues <- c()
-        
-        for (idx in 1:nrow(matchingIndices)) {
-          endocResult$ENDOCcell_SN[matchingIndices[idx, "row"], matchingIndices[idx, "col"]] <- "selected"
-          selectedValues <- c(selectedValues, toString(endocResult$initData[matchingIndices[idx, "row"], ]))
-          print(paste("Selected value added:", endocResult$initData[matchingIndices[idx, "row"], ]))
-        }
-        
-        output$ENDOCSelectedValues <- renderText({
-          paste("Selected Values:", paste(selectedValues, collapse=", "))
+      if (nrow(matchingIndices) > 0) {
+        # Estrae i valori usando apply su matchingIndices
+        selectedValues <- apply(matchingIndices, 1, function(idx) {
+          endocResult$Initdata[idx["row"], idx["col"]]
         })
         
+        # Converti i valori selezionati in un vettore e formatta l'output
+        selectedValuesVector <- unlist(selectedValues)
+        formattedOutput <- paste("Selected Values:", paste(selectedValuesVector, collapse = " - "))
+        output$ENDOCSelectedValues <- renderText({ formattedOutput })
+        
+        # Imposta le celle selezionate su "selected"
+        apply(matchingIndices, 1, function(idx) {
+          endocResult$ENDOCcell_SN[idx["row"], idx["col"]] <- "selected"
+        })
+        endocResult$TablePlot <- NULL
         invalidateLater(1000, session)
+      } else {
+        output$ENDOCSelectedValues <- renderText("No matching indices found.")
       }
+    } else {
+      output$ENDOCSelectedValues <- renderText("No selected values")
     }
   })
   
