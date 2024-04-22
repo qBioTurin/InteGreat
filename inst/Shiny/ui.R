@@ -501,15 +501,12 @@ ui <- dashboardPage(
                               )
                        ),
                        column(width = 8, 
-                               textInput("inputTextENDOC", 
-                                         "cell name", 
-                                         value = "")
+                              selectizeInput("ENDOCcell_SN",
+                                             label = "Experimental condition:",
+                                             choices = "",
+                                             options = list(create = TRUE)),
                               )
                       ),
-                     selectizeInput("ENDOCcell_SN",
-                                    label = "Experimental condition:",
-                                    choices = "",
-                                    options = list(create = TRUE)),
                      selectizeInput("ENDOCcell_TIME",label = "Time:",
                                     choices = "",
                                     options = list(create = TRUE)),

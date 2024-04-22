@@ -1281,7 +1281,6 @@ server <- function(input, output, session) {
     MapBaseline = NULL,
     MapBlank = NULL)
   
-  # save everytime there is a change in the results
   ENDOCresultListen <- reactive({
     reactiveValuesToList(endocResult)
   })
@@ -1311,6 +1310,7 @@ server <- function(input, output, session) {
       )
     } else loadExcelFileENDOC()
   })
+  
   
   observeEvent(input$shinyalert, {
     removeModal()
@@ -1349,34 +1349,6 @@ server <- function(input, output, session) {
       }
   }
   
-  loadEndocColor <- function() {
-    observe({
-      colors <- FlagsENDOC$EXPcol
-      choices <- rep("", length(colors))
-      
-      updatePickerInput(session, "colorDropdown",
-                        choices = colors,
-                        options = list(`style` = "width: 100px;"),
-                        choicesOpt = list(
-                          elementId = paste0("color-", colors),
-                          style = paste0("background-color: ", colors, ";")
-                        ),
-                        selected = NULL
-      )
-    })
-    
-    observeEvent(input$colorDropdown, {
-      selected_color_id <- input$colorDropdown
-      
-      if (!is.null(selected_color_id)) {
-        selected_color <- gsub("^color-", "", selected_color_id)
-        
-        print(paste("Selected color:", selected_color))
-      }
-    })
-  }
-  
-  
   observe({
     if( !is.null(endocResult$Initdata) && is.null(endocResult$TablePlot) ){
       
@@ -1389,6 +1361,403 @@ server <- function(input, output, session) {
     }
   })
   
+  loadEndocColor <- function() {
+    observe({
+      color_names <- names(FlagsENDOC$EXPcol)
+      color_codes <- FlagsENDOC$EXPcol
+      
+      color_styles <- sapply(color_codes, function(color_code) {
+        text_color <- if (grepl("^(#FFFFFF|#FFC000|#FFFF00|#D6D6D6|#EBEBEB)", color_code, ignore.case = TRUE)) "#000000" else "#FFFFFF"
+        paste0("background-color: ", color_code, "; color: ", text_color, ";")
+      })
+      
+      updatePickerInput(session, "colorDropdown",
+                        choices = color_names,
+                        options = list(`style` = "width: 100px;"),
+                        choicesOpt = list(
+                          elementId = color_names, 
+                          style = color_styles
+                        ),
+                        selected = NULL
+      )
+    })
+  }
+  
+  observeEvent(input$colorDropdown, {
+      endocResult$tempStyles <- endocResult$ENDOCcell_SN
+      req(input$colorDropdown)
+      
+      selectedColorName <- input$colorDropdown
+      matchingIndices <- which(endocResult$ENDOCcell_SN == selectedColorName, arr.ind = TRUE)
+      
+      if (length(matchingIndices) > 0) {
+        endocResult$tempStyles[,] <- "" 
+        rows <- matchingIndices[, "row"]
+        cols <- matchingIndices[, "col"]
+        endocResult$tempStyles[cbind(rows, cols)] <- "lightblue"  # Applica stili temporanei
+      } else {
+        endocResult$tempStyles[,] <- ""  # Resetta gli stili se non ci sono corrispondenze
+      }
+      
+      output$data_table <- renderDataTable({
+        req(endocResult$Initdata)
+        datatable(endocResult$Initdata, options = list(pageLength = 25, autoWidth = TRUE)) %>%
+          formatStyle(
+            columns = colnames(endocResult$Initdata),
+            valueColumns = colnames(endocResult$Initdata),
+            backgroundColor = styleEqual("lightblue", endocResult$tempStyles)
+          )
+      })
+  })
+  
+  observeEvent(input$ENDOCmatrix_cell_clicked,{
+    if(length(input$ENDOCmatrix_cell_clicked)!=0){
+      cellSelected= as.numeric(input$ENDOCmatrix_cell_clicked)
+      FlagsENDOC$cellCoo = cellCoo = c(cellSelected[1],cellSelected[2]+1)
+      print(cellCoo)
+      print(endocResult$ENDOCcell_TIME[ cellCoo[1],cellCoo[2] ])
+      print(endocResult$ENDOCcell_SN[ cellCoo[1], cellCoo[2] ])
+      
+      updateSelectizeInput(inputId = "ENDOCcell_TIME",
+                           selected = ifelse(is.null(endocResult$ENDOCcell_TIME[cellCoo[1],cellCoo[2]]),"",endocResult$ENDOCcell_TIME[cellCoo[1],cellCoo[2]])
+      )
+      
+      updateSelectizeInput(inputId = "ENDOCcell_SN",
+                           selected = ifelse(is.null(endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]]),
+                                             "",
+                                             endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]])
+      )
+    }
+  })
+  
+  observeEvent(input$ENDOCcell_TIME,{
+    if(!is.null(endocResult$ENDOCcell_TIME)){
+      cellCoo = FlagsENDOC$cellCoo
+      endocResult$ENDOCcell_TIME[cellCoo[1],cellCoo[2]] = input$ENDOCcell_TIME
+    }
+  })
+  
+  observeEvent(input$ENDOCcell_SN,{
+    if(!is.null(endocResult$ENDOCcell_SN)){
+      ENDOCtb = endocResult$TablePlot
+      cellCoo = FlagsENDOC$cellCoo
+      if(!is.null(cellCoo)){
+        value.bef = endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]] 
+        value.now = input$ENDOCcell_SN
+        
+        # if the value does not change or it is still "Color " then the matrix is not update
+        if( value.now != "" && value.now!=value.bef){
+          
+          endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]] = value.now
+          ENDOCtb$x$data[cellCoo[1],paste0("Col",cellCoo[2])] = value.now
+          
+          if(! input$ENDOCcell_SN %in% FlagsENDOC$AllExp){
+            exp = unique(c(FlagsENDOC$AllExp,input$ENDOCcell_SN))
+            #exp = exp[-grep(pattern = "^Color [1-9]",x = exp)]
+            FlagsENDOC$AllExp  = exp
+            print(FlagsENDOC$AllExp)
+          }
+          
+          ## updating table and colors definition depending on the cell fill 
+          tableExcelColored(session = session,
+                            Result = endocResult, 
+                            FlagsExp = FlagsENDOC,
+                            type = "Update")
+          #####
+          output$ENDOCmatrix <-renderDataTable({endocResult$TablePlot})
+        }
+      }
+    }
+  })
+  
+  ## update Baselines checkBox
+  observeEvent(c(FlagsENDOC$AllExp,FlagsENDOC$BLANCHEselected),{
+    if(length(FlagsENDOC$AllExp) > 1){
+      exp = FlagsENDOC$AllExp
+      exp = exp[exp != ""]
+      
+      if(!( length(FlagsENDOC$BLANCHEselected) == 1 && FlagsENDOC$BLANCHEselected == "") )
+        exp = exp[!exp %in% FlagsENDOC$BLANCHEselected]
+      
+      exp_selec = input$ENDOC_baselines
+      
+      updateCheckboxGroupInput(session,"ENDOC_baselines",
+                               choices = exp,
+                               selected = exp_selec )
+      
+      FlagsENDOC$EXPselected = exp
+      
+    }
+  })
+  
+  observeEvent(c(FlagsENDOC$AllExp,FlagsENDOC$BASEselected),{
+    if(length(FlagsENDOC$AllExp) > 1){
+      exp = FlagsENDOC$AllExp
+      exp = exp[exp != ""]
+      
+      if(! (length(FlagsENDOC$BASEselected) == 1 && FlagsENDOC$BASEselected == "") )
+        exp = exp[!exp %in% FlagsENDOC$BASEselected]
+      
+      exp_selec = input$ENDOC_blanks
+      
+      updateCheckboxGroupInput(session,"ENDOC_blanks",
+                               choices = exp,
+                               selected = exp_selec )
+      
+      FlagsENDOC$EXPselected = exp
+    }
+  })
+  
+  ## select the baselines and blank
+  observeEvent(input$ENDOC_baselines,{
+    FlagsENDOC$BASEselected = input$ENDOC_baselines
+    FlagsENDOC$EXPselected = FlagsENDOC$AllExp[! FlagsENDOC$AllExp %in% c(FlagsENDOC$BASEselected,FlagsENDOC$BLANCHEselected)]
+  },ignoreNULL = F)
+  observeEvent(input$ENDOC_blanks,{
+    FlagsENDOC$BLANCHEselected = input$ENDOC_blanks
+    FlagsENDOC$EXPselected = FlagsENDOC$AllExp[! FlagsENDOC$AllExp %in% c(FlagsENDOC$BASEselected,FlagsENDOC$BLANCHEselected)]
+  },ignoreNULL = F)
+  
+  toListen_endoc <- reactive({
+    exp = FlagsENDOC$EXPselected
+    exp = exp[exp != ""]
+    if(length(exp) > 0 )
+    {
+      Input_baselEXP = lapply(exp,
+                              function(i) input[[paste0("Exp",i)]])
+      Input_blEXP = lapply(unique(exp,FlagsENDOC$BASELINEselected),
+                           function(i) input[[paste0("blExp",i)]] )
+      InputEXP = c(Input_baselEXP,Input_blEXP)
+      
+      which(sapply(InputEXP, is.null)) -> indexesEXPnull
+      if(length(indexesEXPnull) > 0 )
+        listReturn = InputEXP[-indexesEXPnull]
+      else
+        listReturn = InputEXP
+    }else{
+      listReturn = list()
+    }
+    
+    if(length(listReturn) == 0){
+      return(list("Nothing",endocResult$ENDOCcell_TIME,endocResult$ENDOCcell_SN))
+    }else{
+      return(c(listReturn,list(endocResult$ENDOCcell_TIME,endocResult$ENDOCcell_SN)) )
+    }
+  })
+  
+  observeEvent(toListen_endoc(),{
+    baselines = FlagsENDOC$BASEselected
+    baselines = baselines[baselines != ""]
+    
+    if(toListen_endoc()[[1]] != "Nothing"){
+      exp = FlagsENDOC$EXPselected
+      exp = exp[exp != ""]
+      expNotBlank = unique(c(exp,baselines))
+      
+      MapBaseline = do.call(rbind,
+                            lapply(exp,function(i){
+                              if( length(input[[paste0("Exp",i)]]) > 0 && input[[paste0("Exp",i)]] != ""){
+                                data.frame(Exp = i, Baseline = input[[paste0("Exp",i)]])
+                              }else{
+                                data.frame(Exp = i, Baseline = NA)
+                              }
+                            })
+      ) %>% na.omit()
+      
+      MapBlank = do.call(rbind,
+                         lapply(expNotBlank,
+                                function(i){
+                                  if( length(input[[paste0("blExp",i)]]) > 0 && input[[paste0("blExp",i)]] != ""){
+                                    data.frame(Exp = i, Blank = input[[paste0("blExp",i)]])
+                                  }else{
+                                    data.frame(Exp = i, Blank = NA)
+                                  }
+                                })
+      ) %>% na.omit()
+      
+      if(dim(MapBaseline)[1]!=0 && dim(MapBlank)[1]!=0 ){
+        
+        endocResult$MapBaseline = MapBaseline
+        endocResult$MapBlank = MapBlank
+        
+        mat = as.matrix(endocResult$Initdata)
+        endocV = expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
+          rowwise() %>%
+          mutate(values = mat[Var1, Var2])
+        matTime =  as.matrix(endocResult$ENDOCcell_TIME)
+        endocT = expand.grid(seq_len(nrow(matTime)), seq_len(ncol(matTime))) %>%
+          rowwise() %>%
+          mutate(time = matTime[Var1, Var2])
+        matExp =  as.matrix(endocResult$ENDOCcell_SN)
+        endocE = expand.grid(seq_len(nrow(matExp)), seq_len(ncol(matExp))) %>%
+          rowwise() %>%
+          mutate(exp = matExp[Var1, Var2])
+        endocTot = merge(endocV,merge(endocT,endocE)) %>%
+          filter(exp != "")
+        
+        endocTotAverage = endocTot %>%
+          mutate(time = ifelse(exp %in% MapBlank$Blank, 0, time)) %>%
+          group_by(time, exp) %>%
+          summarize(meanValues = mean(values))
+        
+        # merging exp with blank for the substraction
+        
+        endocTot_bl = right_join( endocTotAverage,MapBlank, 
+                                  by= c("exp"= "Blank") )%>%
+          rename(BlankValues = meanValues, Blank =  exp, exp = Exp )
+        
+        endocTotAverage = merge( endocTotAverage %>% filter(! exp %in%endocTot_bl$Blank ),
+                                 endocTot_bl %>% ungroup() %>%
+                                   dplyr::select(-time), all.x = T, by = "exp") %>%
+          rename(Exp = exp) 
+        endocTotAverage = endocTotAverage %>% mutate(meanValues = meanValues - BlankValues )
+        
+        # merging exp with baseline
+        endocTot_base = merge(MapBaseline, endocTotAverage,
+                              by.y = "Exp", by.x = "Baseline") %>%
+          rename(BaseValues = meanValues) %>% 
+          select(-Blank,-BlankValues)
+        
+        if(length(unique(endocTot_base$time)) == 1){ 
+          # if there is only one point then the baseline is used to normalize every times
+          endocTot_base = endocTot_base %>% select(-time)
+        }
+        endocTot_base = merge(endocTotAverage,
+                              endocTot_base )
+        # by.x = c("exp","time"),
+        # by.y = c("Exp","time")
+        #)
+        endocResult$data = endocTot
+        
+        if(length(endocTotAverage[,1]) != 0 ){
+          endocmean = endocTot_base %>%
+            rename( MeanExperiment = meanValues,
+                    MeanBaseline = BaseValues ) %>%
+            dplyr::mutate(Quantification = MeanExperiment/MeanBaseline * 100) %>%
+            rename(Experiment = Exp,Time = time) 
+          
+          output$ENDOCtables = renderDT(endocmean)
+          
+          endocResult$dataFinal = endocmean
+          
+          output$ENDOCplots = renderPlot(
+            {
+              pl1 = endocmean %>%
+                ggplot( aes(x = Time, y = MeanBaseline,
+                            col= Baseline, group = Experiment ) )+
+                geom_point( )+
+                geom_line()+
+                theme_bw()+
+                labs(x = "Time", col = "Baselines selected",
+                     y = "Average Baseline\n quantifications")
+              
+              pl2 = endocmean %>%
+                mutate(ExperimentBaseline = paste0(Experiment,"/",Baseline)) %>%
+                ggplot( aes(x = Time, y = Quantification,
+                            col= ExperimentBaseline, group = Experiment ) )+
+                geom_point()+
+                geom_line()+
+                theme_bw()+
+                labs(x = "Time", col = "Ratio\n Experiment / Baseline",
+                     y = "Ratio of the average quantifications\n (as %)")
+              
+              pl2/pl1
+            }
+          )
+        }else{
+          output$ENDOCtables = renderDT(data.frame(Error = "No baseline is associated with the experiment replicants!"))
+        }        
+      }
+    }
+  })
+  
+  # here the Exp boxes are updated every time a new experiment is added 
+  observeEvent(FlagsENDOC$EXPselected,{
+    expToselect = FlagsENDOC$EXPselected
+    baselines =  FlagsENDOC$BASEselected
+    blanks = FlagsENDOC$BLANCHEselected
+    
+    expToselect = expToselect[expToselect != ""]
+    
+    # baselines updating
+    output$EndocBaselineSelection <- renderUI({
+      select_output_list <- lapply(expToselect[! expToselect %in% baselines],
+                                   function(i) {
+                                     if(length(input[[paste0("Exp",i)]])>0)
+                                       expsel = input[[paste0("Exp",i)]]
+                                     else 
+                                       expsel = ""
+                                     
+                                     selectInput(inputId = paste0("Exp",i),
+                                                 label = i,
+                                                 choices = c("",baselines),
+                                                 selected = expsel)
+                                   })
+      do.call(tagList, select_output_list)
+    })
+    # blanks updating
+    output$EndocBlankSelection <- renderUI({
+      select_output_list <- lapply(unique(c(expToselect,baselines)), function(i) {
+        
+        if(length(input[[paste0("blExp",i)]])>0)
+          expsel = input[[paste0("blExp",i)]]
+        else 
+          expsel = ""
+        
+        selectInput(inputId = paste0("blExp",i),
+                    label = i,
+                    choices = c("",blanks),
+                    selected = expsel)
+      })
+      do.call(tagList, select_output_list)
+    })
+  })
+  
+  observeEvent(endocResult$TablePlot, {
+    ENDOCtb = endocResult$TablePlot
+    output$ENDOCmatrix <- renderDT(
+      ENDOCtb,
+      server = FALSE
+    )
+    
+    ##### Plot the values selected!
+    matTime =  as.matrix(endocResult$ENDOCcell_TIME)
+    matExp =  as.matrix(endocResult$ENDOCcell_SN)
+    
+    if( !( all(matTime == "")  || all(matExp == "") ) ){
+      mat = as.matrix(endocResult$Initdata)
+      endocV = expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
+        rowwise() %>%
+        mutate(values = mat[Var1, Var2])
+      endocT = expand.grid(seq_len(nrow(matTime)), seq_len(ncol(matTime))) %>%
+        rowwise() %>%
+        mutate(time = matTime[Var1, Var2])
+      endocE = expand.grid(seq_len(nrow(matExp)), seq_len(ncol(matExp))) %>%
+        rowwise() %>%
+        mutate(exp = matExp[Var1, Var2])
+      endocTot = merge(endocV,merge(endocT,endocE)) %>%
+        na.omit() %>%
+        filter(time != "",  exp != "") 
+      
+      endocResult$data = endocTot
+      
+      output$ENDOCinitplots <- renderPlot(
+        ggplot(endocTot, aes(x = time, y=values, col = exp),alpha = 1.4) +
+          #geom_boxplot(aes(fill= exp, group = time),alpha = 0.4) +
+          geom_point(aes(group = exp)) +
+          scale_color_manual(values = FlagsENDOC$EXPcol) + 
+          #scale_fill_manual(values = FlagsENDOC$EXPcol) + 
+          theme_bw()+
+          labs(x = "Times", y = "Values", col = "Exp",fill = "Exp")+
+          theme(legend.position = c(0, 1), 
+                legend.justification = c(0, 1),
+                legend.direction = "vertical",
+                legend.background = element_rect(size=0.5,
+                                                 linetype="solid",
+                                                 colour ="black"))
+      )
+    }
+  })
   #### END endocytosis ####
   
   #start statistics
