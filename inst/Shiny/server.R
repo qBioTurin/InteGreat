@@ -1343,7 +1343,7 @@ server <- function(input, output, session) {
       } else {
         endocResult$Initdata = mess$x
         FlagsENDOC$EXPcol = mess$fill
-        FlagsENDOC$EXPcol$selected <- "#00ff00"
+        FlagsENDOC$EXPcol$selected <- "#e5be01"
         endocResult$ENDOCcell_SN = mess$SNtable
         
         removeModal()
@@ -1384,7 +1384,7 @@ server <- function(input, output, session) {
       color_names <- names(FlagsENDOC$EXPcol)
       color_codes <- FlagsENDOC$EXPcol
       
-      selected_color_index <- which(color_names == "selected")
+      selected_color_index <- which(color_names == "selected" | color_codes == "#49ff00")
       if (length(selected_color_index) > 0) {
         color_names <- color_names[-selected_color_index]
         color_codes <- color_codes[-selected_color_index]
@@ -1392,7 +1392,7 @@ server <- function(input, output, session) {
       
       color_styles <- sapply(color_codes, function(color_code) {
         text_color <- if (grepl("^(#FFFFFF|#FFC000|#FFFF00|#D6D6D6|#EBEBEB)", color_code, ignore.case = TRUE)) "#000000" else "#FFFFFF"
-        paste0("background-color: ", color_code, "; color: ", text_color, ";")
+        paste0("background-color: ", color_code, "; color: ", color_code, ";")
       })
       
       updatePickerInput(session, "colorDropdown",
@@ -1404,7 +1404,6 @@ server <- function(input, output, session) {
                         ),
                         selected = NULL
       )
-     
     })
   }
   
@@ -1440,7 +1439,6 @@ server <- function(input, output, session) {
         
         apply(matchingIndices, 1, function(idx) {
           endocResult$ENDOCcell_SN[idx["row"], idx["col"]] <- "selected"
-          print(paste("Set cell to 'selected' at row:", idx["row"], "col:", idx["col"]))  # Debug
           updateSelectizeInput(inputId = "ENDOCcell_TIME",
                                selected = ifelse(is.null(endocResult$ENDOCcell_TIME[idx["row"], idx["col"]]),
                                                  "",
@@ -1451,7 +1449,6 @@ server <- function(input, output, session) {
                                                  "",
                                                  endocResult$ENDOCcell_SN[idx["row"], idx["col"]])
           )
-          print(paste("Updated ENDOCcell_TIME and ENDOCcell_SN at row:", idx["row"], "col:", idx["col"]))  # Debug
         })
         endocResult$TablePlot <- NULL
         invalidateLater(1000, session)
@@ -1463,84 +1460,61 @@ server <- function(input, output, session) {
     }
   })
   
-  observeEvent(c(FlagsENDOC$AllExp, FlagsENDOC$BLANCHEselected), {
-    if (length(FlagsENDOC$AllExp) > 1) {
-      exp <- FlagsENDOC$AllExp
-      exp <- exp[exp != ""]
-      
-      if (!(length(FlagsENDOC$BLANCHEselected) == 1 && FlagsENDOC$BLANCHEselected == "")) {
-        exp <- exp[!exp %in% FlagsENDOC$BLANCHEselected]
-      }
-      
-      exp_selec <- input$ENDOC_baselines
-      
-      updateCheckboxGroupInput(session, "ENDOC_baselines",
-                               choices = exp,
-                               selected = exp_selec)
-      
-      FlagsENDOC$EXPselected <- exp
-    }
-  })
-  
   observeEvent(input$ENDOCcell_TIME, {
     if (!is.null(endocResult$ENDOCcell_TIME)) {
-      # Trova tutte le celle selezionate
       selectedIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
       
-      # Applica il nuovo valore di tempo a tutte le celle selezionate
       if (nrow(selectedIndices) > 0) {
         apply(selectedIndices, 1, function(idx) {
           endocResult$ENDOCcell_TIME[idx["row"], idx["col"]] <- input$ENDOCcell_TIME
         })
-        # Potresti voler invalidare o aggiornare un output qui se necessario
       }
     }
   })
   
   observeEvent(input$ENDOCcell_SN, {
-    req(input$ENDOCcell_SN)  # Assicurarsi che l'input non sia NULL
-    # Trova tutte le celle selezionate
+    req(input$ENDOCcell_SN)  
+
     selectedIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
-    
     if (nrow(selectedIndices) > 0) {
-      needsUpdate <- FALSE  # Flag per verificare se è necessario aggiornare la tabella
+      updates <- list()  
       
-      apply(selectedIndices, 1, function(idx) {
-        cellCoo <- c(idx["row"], idx["col"])
-        value.bef = endocResult$ENDOCcell_SN[cellCoo[1], cellCoo[2]]
-        value.now = input$ENDOCcell_SN
+      for (idx in seq_len(nrow(selectedIndices))) {
+        cellCoo <- c(selectedIndices[idx, "row"], selectedIndices[idx, "col"])
+        value.now <- input$ENDOCcell_SN
+        value.bef <- endocResult$ENDOCcell_SN[cellCoo[1], cellCoo[2]]
         
         if (value.now != "" && value.now != value.bef) {
-          endocResult$ENDOCcell_SN[cellCoo[1], cellCoo[2]] = value.now
-          endocResult$TablePlot$x$data[cellCoo[1], paste0("Col", cellCoo[2])] = value.now
-          
-          if (!value.now %in% FlagsENDOC$AllExp) {
-            exp = unique(c(FlagsENDOC$AllExp, value.now))
-            FlagsENDOC$AllExp = exp
-            print(FlagsENDOC$AllExp)
-          }
-          
-          needsUpdate <- TRUE  # Segnala che è necessario un aggiornamento
+          updates[[length(updates) + 1]] <- list(cellCoo = cellCoo, value = value.now)
         }
-      })
+      }
       
-      # Aggiorna la tabella e la definizione dei colori una sola volta, se necessario
-      if (needsUpdate) {
+      if (length(updates) > 0) {
+        for (update in updates) {
+          cellCoo <- update$cellCoo
+          value.now <- update$value
+          endocResult$ENDOCcell_SN[cellCoo[1], cellCoo[2]] <- value.now
+          endocResult$TablePlot$x$data[cellCoo[1], paste0("Col", cellCoo[2])] <- value.now
+          
+          if (nzchar(value.now) && !value.now %in% FlagsENDOC$AllExp) {
+            exp <- unique(c(FlagsENDOC$AllExp, value.now))
+            exp <- exp[exp != ""]
+            FlagsENDOC$AllExp <- exp
+          }
+        }
+        
         tableExcelColored(session = session,
                           Result = endocResult, 
                           FlagsExp = FlagsENDOC,
-                          type = "Update")
+                          type = "Update_new")
         output$ENDOCmatrix <- renderDataTable({endocResult$TablePlot})
       }
-    }
-  })
-  
-  
-  
+    } else showAlert("Error", "please, select before a row color", "error", 5000)
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   ## update Baselines checkBox
   observeEvent(c(FlagsENDOC$AllExp,FlagsENDOC$BLANCHEselected),{
-    if(length(FlagsENDOC$AllExp) > 1){
+    if(length(FlagsENDOC$AllExp) >= 1){
       exp = FlagsENDOC$AllExp
       exp = exp[exp != ""]
       
@@ -1559,7 +1533,7 @@ server <- function(input, output, session) {
   })
   
   observeEvent(c(FlagsENDOC$AllExp,FlagsENDOC$BASEselected),{
-    if(length(FlagsENDOC$AllExp) > 1){
+    if(length(FlagsENDOC$AllExp) >= 1){
       exp = FlagsENDOC$AllExp
       exp = exp[exp != ""]
       
@@ -1826,7 +1800,8 @@ server <- function(input, output, session) {
       )
     }
   })
-  #### END endocytosis ####
+  
+  ### End ENDOC analysis ####
   
   #start statistics
   DataStatisticModule = reactiveValues(WB = list(),
