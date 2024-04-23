@@ -1412,41 +1412,46 @@ server <- function(input, output, session) {
     req(input$colorDropdown)
     
     selectedColorName <- input$colorDropdown
-    print(paste("Selected Color Name:", selectedColorName))  # Debug
-    
+
     whiteKey <- names(FlagsENDOC$EXPcol)[FlagsENDOC$EXPcol == "white"]
-    print(paste("White Key:", whiteKey))  # Debug
-    
-    # Ripristino del colore originale
+
     if (exists("originalColor") && originalColor != "" && any(endocResult$ENDOCcell_SN == "selected")) {
       originalIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
-      print(paste("Original Indices:", toString(originalIndices)))  # Debug
-      
+
       if (length(originalIndices) > 0) {
         for (idx in 1:nrow(originalIndices)) {
           endocResult$ENDOCcell_SN[originalIndices[idx, "row"], originalIndices[idx, "col"]] <- originalColor
-          print(paste("Restoring color at row:", originalIndices[idx, "row"], "col:", originalIndices[idx, "col"], "to", originalColor))  # Debug
         }
       }
     }
     
     if (selectedColorName != "white" && selectedColorName != "#FFFFFF" && selectedColorName != whiteKey) {
       matchingIndices <- which(endocResult$ENDOCcell_SN == selectedColorName, arr.ind = TRUE)
-      
+
       if (nrow(matchingIndices) > 0) {
-        # Estrae i valori usando apply su matchingIndices
+        originalColor <<- selectedColorName  
         selectedValues <- apply(matchingIndices, 1, function(idx) {
           endocResult$Initdata[idx["row"], idx["col"]]
         })
-        
-        # Converti i valori selezionati in un vettore e formatta l'output
+
         selectedValuesVector <- unlist(selectedValues)
         formattedOutput <- paste("Selected Values:", paste(selectedValuesVector, collapse = " - "))
         output$ENDOCSelectedValues <- renderText({ formattedOutput })
         
-        # Imposta le celle selezionate su "selected"
         apply(matchingIndices, 1, function(idx) {
           endocResult$ENDOCcell_SN[idx["row"], idx["col"]] <- "selected"
+          print(paste("Set cell to 'selected' at row:", idx["row"], "col:", idx["col"]))  # Debug
+          updateSelectizeInput(inputId = "ENDOCcell_TIME",
+                               selected = ifelse(is.null(endocResult$ENDOCcell_TIME[idx["row"], idx["col"]]),
+                                                 "",
+                                                 endocResult$ENDOCcell_TIME[idx["row"], idx["col"]])
+          )
+          updateSelectizeInput(inputId = "ENDOCcell_SN",
+                               selected = ifelse(is.null(endocResult$ENDOCcell_SN[idx["row"], idx["col"]]),
+                                                 "",
+                                                 endocResult$ENDOCcell_SN[idx["row"], idx["col"]])
+          )
+          print(paste("Updated ENDOCcell_TIME and ENDOCcell_SN at row:", idx["row"], "col:", idx["col"]))  # Debug
         })
         endocResult$TablePlot <- NULL
         invalidateLater(1000, session)
@@ -1458,65 +1463,80 @@ server <- function(input, output, session) {
     }
   })
   
-  observeEvent(input$ENDOCmatrix_cell_clicked,{
-    if(length(input$ENDOCmatrix_cell_clicked)!=0){
-      cellSelected= as.numeric(input$ENDOCmatrix_cell_clicked)
-      FlagsENDOC$cellCoo = cellCoo = c(cellSelected[1],cellSelected[2]+1)
-      print(cellCoo)
-      print(endocResult$ENDOCcell_TIME[ cellCoo[1],cellCoo[2] ])
-      print(endocResult$ENDOCcell_SN[ cellCoo[1], cellCoo[2] ])
+  observeEvent(c(FlagsENDOC$AllExp, FlagsENDOC$BLANCHEselected), {
+    if (length(FlagsENDOC$AllExp) > 1) {
+      exp <- FlagsENDOC$AllExp
+      exp <- exp[exp != ""]
       
-      updateSelectizeInput(inputId = "ENDOCcell_TIME",
-                           selected = ifelse(is.null(endocResult$ENDOCcell_TIME[cellCoo[1],cellCoo[2]]),"",endocResult$ENDOCcell_TIME[cellCoo[1],cellCoo[2]])
-      )
+      if (!(length(FlagsENDOC$BLANCHEselected) == 1 && FlagsENDOC$BLANCHEselected == "")) {
+        exp <- exp[!exp %in% FlagsENDOC$BLANCHEselected]
+      }
       
-      updateSelectizeInput(inputId = "ENDOCcell_SN",
-                           selected = ifelse(is.null(endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]]),
-                                             "",
-                                             endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]])
-      )
+      exp_selec <- input$ENDOC_baselines
+      
+      updateCheckboxGroupInput(session, "ENDOC_baselines",
+                               choices = exp,
+                               selected = exp_selec)
+      
+      FlagsENDOC$EXPselected <- exp
     }
   })
   
-  observeEvent(input$ENDOCcell_TIME,{
-    if(!is.null(endocResult$ENDOCcell_TIME)){
-      cellCoo = FlagsENDOC$cellCoo
-      endocResult$ENDOCcell_TIME[cellCoo[1],cellCoo[2]] = input$ENDOCcell_TIME
-    }
-  })
-  
-  observeEvent(input$ENDOCcell_SN,{
-    if(!is.null(endocResult$ENDOCcell_SN)){
-      ENDOCtb = endocResult$TablePlot
-      cellCoo = FlagsENDOC$cellCoo
-      if(!is.null(cellCoo)){
-        value.bef = endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]] 
-        value.now = input$ENDOCcell_SN
-        
-        # if the value does not change or it is still "Color " then the matrix is not update
-        if( value.now != "" && value.now!=value.bef){
-          
-          endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]] = value.now
-          ENDOCtb$x$data[cellCoo[1],paste0("Col",cellCoo[2])] = value.now
-          
-          if(! input$ENDOCcell_SN %in% FlagsENDOC$AllExp){
-            exp = unique(c(FlagsENDOC$AllExp,input$ENDOCcell_SN))
-            #exp = exp[-grep(pattern = "^Color [1-9]",x = exp)]
-            FlagsENDOC$AllExp  = exp
-            print(FlagsENDOC$AllExp)
-          }
-          
-          ## updating table and colors definition depending on the cell fill 
-          tableExcelColored(session = session,
-                            Result = endocResult, 
-                            FlagsExp = FlagsENDOC,
-                            type = "Update")
-          #####
-          output$ENDOCmatrix <-renderDataTable({endocResult$TablePlot})
-        }
+  observeEvent(input$ENDOCcell_TIME, {
+    if (!is.null(endocResult$ENDOCcell_TIME)) {
+      # Trova tutte le celle selezionate
+      selectedIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
+      
+      # Applica il nuovo valore di tempo a tutte le celle selezionate
+      if (nrow(selectedIndices) > 0) {
+        apply(selectedIndices, 1, function(idx) {
+          endocResult$ENDOCcell_TIME[idx["row"], idx["col"]] <- input$ENDOCcell_TIME
+        })
+        # Potresti voler invalidare o aggiornare un output qui se necessario
       }
     }
   })
+  
+  observeEvent(input$ENDOCcell_SN, {
+    req(input$ENDOCcell_SN)  # Assicurarsi che l'input non sia NULL
+    # Trova tutte le celle selezionate
+    selectedIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
+    
+    if (nrow(selectedIndices) > 0) {
+      needsUpdate <- FALSE  # Flag per verificare se è necessario aggiornare la tabella
+      
+      apply(selectedIndices, 1, function(idx) {
+        cellCoo <- c(idx["row"], idx["col"])
+        value.bef = endocResult$ENDOCcell_SN[cellCoo[1], cellCoo[2]]
+        value.now = input$ENDOCcell_SN
+        
+        if (value.now != "" && value.now != value.bef) {
+          endocResult$ENDOCcell_SN[cellCoo[1], cellCoo[2]] = value.now
+          endocResult$TablePlot$x$data[cellCoo[1], paste0("Col", cellCoo[2])] = value.now
+          
+          if (!value.now %in% FlagsENDOC$AllExp) {
+            exp = unique(c(FlagsENDOC$AllExp, value.now))
+            FlagsENDOC$AllExp = exp
+            print(FlagsENDOC$AllExp)
+          }
+          
+          needsUpdate <- TRUE  # Segnala che è necessario un aggiornamento
+        }
+      })
+      
+      # Aggiorna la tabella e la definizione dei colori una sola volta, se necessario
+      if (needsUpdate) {
+        tableExcelColored(session = session,
+                          Result = endocResult, 
+                          FlagsExp = FlagsENDOC,
+                          type = "Update")
+        output$ENDOCmatrix <- renderDataTable({endocResult$TablePlot})
+      }
+    }
+  })
+  
+  
+  
   
   ## update Baselines checkBox
   observeEvent(c(FlagsENDOC$AllExp,FlagsENDOC$BLANCHEselected),{

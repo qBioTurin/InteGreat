@@ -493,8 +493,12 @@ ui <- dashboardPage(
               ),
               column(width = 6,
                      fluidRow(
-                       column(width = 8,
-                              textOutput("ENDOCSelectedValues") # Output che può essere aggiornato dal server
+                       column(8, offset = 2,
+                              tags$div(
+                                textOutput("ENDOCSelectedValues"),
+                                style = "font-size: 24px; text-align: center; color: #00ff00;
+                                         width: 100%; margin-top: 20px; margin-bottom: 20px;"
+                              )
                        )
                      ),
                      fluidRow(
