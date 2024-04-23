@@ -532,9 +532,14 @@ ui <- dashboardPage(
                                              options = list(create = TRUE)),
                               )
                      ),
-                     selectizeInput("ENDOCcell_TIME",label = "Time:",
-                                    choices = "",
-                                    options = list(create = TRUE)),
+                     fluidRow(
+                       column(width = 8, offset = 4,  
+                              selectizeInput("ENDOCcell_TIME",
+                                             label = "Time:",
+                                             choices = "",
+                                             options = list(create = TRUE))
+                       )
+                     ),
                      fluidRow(
                        column(6,
                               checkboxGroupInput(inputId = "ENDOC_baselines",

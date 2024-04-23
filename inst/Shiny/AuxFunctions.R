@@ -356,152 +356,153 @@ saveExcel <- function(filename, ResultList, analysis, PanelStructures = NULL) {
 }
 
 tableExcelColored = function(session, output,Result, FlagsExp, type){
-  if(type == "Initialize"){
-    ExpDataTable = Result$Initdata
-    
-    if(is.null(FlagsExp$EXPcol)){
-      ExpDataTable.colors = matrix("",nrow = nrow(ExpDataTable),ncol=ncol(ExpDataTable))
-    }else{
-      ExpDataTable.colors = Result[[grep(x=names(Result), pattern = "cell_SN", value = T)]]
-    }
-    completeExpDataTable = cbind(ExpDataTable,ExpDataTable.colors)
-    
-    cols.keep <- paste0('V',1:length(ExpDataTable[1,])) 
-    cols.color <- paste0('Col',1:length(ExpDataTable[1,]))
-    colnames(completeExpDataTable) = c(cols.keep,cols.color)
-    
-    if(is.null(FlagsExp$EXPcol)){
-      EXPcol = ""
-      names(EXPcol) = "white"
-    }else{
-      EXPcol = FlagsExp$EXPcol
-    }
-    
-    ExpDataTable = datatable(completeExpDataTable,
-                             filter = 'none',
-                             #server = FALSE,
-                             selection = list(mode = 'single', target = 'cell'),
-                             rownames= FALSE,
-                             options = list(
-                               dom = 't',
-                               pageLength = -1,
-                               info = FALSE,
-                               #scrollX = TRUE,
-                               #lengthChange = FALSE,
-                               columnDefs = list(list(targets = cols.color, visible = FALSE))
-                             )) %>%
-      formatStyle(cols.keep,
-                  cols.color,
-                  backgroundColor = styleEqual(names(EXPcol), EXPcol) )
-    
-    cell_SN <- ExpDataTable.colors
-    cell_TIME <- cell_EXP <- cell_REP <- matrix(
-      "",
-      nrow = length(ExpDataTable$x$data[,1]),
-      ncol = length(ExpDataTable$x$data[1,])
-    )
-    
-    if(length(grep(x=names(Result),pattern = "cell_SN", value = T))>0)
-      Result[[grep(x=names(Result),pattern = "cell_SN", value = T)]] <- cell_SN
-    if(length(grep(x=names(Result),pattern = "cell_EXP", value = T))>0)
-      Result[[grep(x=names(Result),pattern = "cell_EXP", value = T)]]<- cell_EXP
-    if(length(grep(x=names(Result),pattern = "cell_REP", value = T))>0)
-      Result[[grep(x=names(Result),pattern = "cell_REP", value = T)]]<- cell_REP
-    if(length(grep(x=names(Result),pattern = "cell_TIME", value = T))>0)
-      Result[[grep(x=names(Result),pattern = "cell_TIME", value = T)]]<- cell_TIME
-    
-    Result$TablePlot = ExpDataTable
-  }
-  else if(type == "Update") {
-    ColorsSN = rainbow(n = 50, alpha = 0.5)[sample(50, size = 50, replace = FALSE)]
-    
-    if(is.null(FlagsExp$EXPcol)) {
-      print("No existing color mapping found. Creating new one.")
-      EXPcol = setNames(ColorsSN[1:length(FlagsExp$AllExp)], FlagsExp$AllExp)
-      EXPcol[names(EXPcol) == ""] <- "white"  
-      FlagsExp$EXPcol <- EXPcol
-    } else {
-      print("Existing color mapping found. Updating if necessary.")
-      SNnew = FlagsExp$AllExp[!FlagsExp$AllExp %in% names(FlagsExp$EXPcol)]
-      if(length(SNnew) > 0) {
-        print(paste("New SNs found:", paste(SNnew, collapse=", ")))
-        colNew = ColorsSN[!ColorsSN %in% FlagsExp$EXPcol][1:length(SNnew)]
-        names(colNew) = SNnew
-        EXPcol = c(FlagsExp$EXPcol, colNew)
+  switch(type,
+      "Initialize" = {
+      ExpDataTable = Result$Initdata
+      
+      if(is.null(FlagsExp$EXPcol)){
+        ExpDataTable.colors = matrix("",nrow = nrow(ExpDataTable),ncol=ncol(ExpDataTable))
+      }else{
+        ExpDataTable.colors = Result[[grep(x=names(Result), pattern = "cell_SN", value = T)]]
+      }
+      completeExpDataTable = cbind(ExpDataTable,ExpDataTable.colors)
+      
+      cols.keep <- paste0('V',1:length(ExpDataTable[1,])) 
+      cols.color <- paste0('Col',1:length(ExpDataTable[1,]))
+      colnames(completeExpDataTable) = c(cols.keep,cols.color)
+      
+      if(is.null(FlagsExp$EXPcol)){
+        EXPcol = ""
+        names(EXPcol) = "white"
+      }else{
+        EXPcol = FlagsExp$EXPcol
+      }
+      
+      ExpDataTable = datatable(completeExpDataTable,
+                               filter = 'none',
+                               #server = FALSE,
+                               selection = list(mode = 'single', target = 'cell'),
+                               rownames= FALSE,
+                               options = list(
+                                 dom = 't',
+                                 pageLength = -1,
+                                 info = FALSE,
+                                 #scrollX = TRUE,
+                                 #lengthChange = FALSE,
+                                 columnDefs = list(list(targets = cols.color, visible = FALSE))
+                               )) %>%
+        formatStyle(cols.keep,
+                    cols.color,
+                    backgroundColor = styleEqual(names(EXPcol), EXPcol) )
+      
+      cell_SN <- ExpDataTable.colors
+      cell_TIME <- cell_EXP <- cell_REP <- matrix(
+        "",
+        nrow = length(ExpDataTable$x$data[,1]),
+        ncol = length(ExpDataTable$x$data[1,])
+      )
+      
+      if(length(grep(x=names(Result),pattern = "cell_SN", value = T))>0)
+        Result[[grep(x=names(Result),pattern = "cell_SN", value = T)]] <- cell_SN
+      if(length(grep(x=names(Result),pattern = "cell_EXP", value = T))>0)
+        Result[[grep(x=names(Result),pattern = "cell_EXP", value = T)]]<- cell_EXP
+      if(length(grep(x=names(Result),pattern = "cell_REP", value = T))>0)
+        Result[[grep(x=names(Result),pattern = "cell_REP", value = T)]]<- cell_REP
+      if(length(grep(x=names(Result),pattern = "cell_TIME", value = T))>0)
+        Result[[grep(x=names(Result),pattern = "cell_TIME", value = T)]]<- cell_TIME
+      
+      Result$TablePlot = ExpDataTable
+    }, "Update" =  {
+      ColorsSN = rainbow(n = 50, alpha = 0.5)[sample(50, size = 50, replace = FALSE)]
+      
+      if(is.null(FlagsExp$EXPcol)) {
+        print("No existing color mapping found. Creating new one.")
+        EXPcol = setNames(ColorsSN[1:length(FlagsExp$AllExp)], FlagsExp$AllExp)
+        EXPcol[names(EXPcol) == ""] <- "white"  
+        FlagsExp$EXPcol <- EXPcol
+      } else {
+        print("Existing color mapping found. Updating if necessary.")
+        SNnew = FlagsExp$AllExp[!FlagsExp$AllExp %in% names(FlagsExp$EXPcol)]
+        if(length(SNnew) > 0) {
+          print(paste("New SNs found:", paste(SNnew, collapse=", ")))
+          colNew = ColorsSN[!ColorsSN %in% FlagsExp$EXPcol][1:length(SNnew)]
+          names(colNew) = SNnew
+          EXPcol = c(FlagsExp$EXPcol, colNew)
+          EXPcol[names(EXPcol) == ""] <- "white"
+          FlagsExp$EXPcol <- EXPcol
+        } else {
+          print("No new SNs to update.")
+        }
+      }
+      
+      ExpDataTable = Result$TablePlot$x$data
+      completeExpDataTable = cbind(Result$Initdata, Result[[grep(x=names(Result), pattern = "cell_SN", value = TRUE)]])
+      colnames(completeExpDataTable) = colnames(ExpDataTable)
+      
+      cols.color = grep(x = colnames(ExpDataTable), pattern = "Col", value = TRUE)
+      cols.keep = grep(x = colnames(ExpDataTable), pattern = "V", value = TRUE)
+      
+      Result$TablePlot = datatable(completeExpDataTable,
+                                   filter = 'none',
+                                   selection = list(mode = 'single', target = 'cell'),
+                                   rownames = FALSE,
+                                   options = list(
+                                     dom = 't',
+                                     pageLength = -1,
+                                     info = FALSE,
+                                     columnDefs = list(list(targets = cols.color, visible = FALSE))
+                                   )) %>%
+        formatStyle(cols.keep,
+                    cols.color,
+                    backgroundColor = styleEqual(names(FlagsExp$EXPcol), FlagsExp$EXPcol))
+      
+      print("Table and colors updated.")
+    }, "Update_new" =  {
+      defaultColor <- "#49ff00"  
+      
+      if(is.null(FlagsExp$EXPcol)) {
+        print("No existing color mapping found. Creating new one.")
+        EXPcol = setNames(rep(defaultColor, length(FlagsExp$AllExp)), FlagsExp$AllExp)
         EXPcol[names(EXPcol) == ""] <- "white"
         FlagsExp$EXPcol <- EXPcol
       } else {
-        print("No new SNs to update.")
+        print("Existing color mapping found. Updating if necessary.")
+        SNnew = FlagsExp$AllExp[!FlagsExp$AllExp %in% names(FlagsExp$EXPcol)]
+        if(length(SNnew) > 0) {
+          print(paste("New SNs found:", paste(SNnew, collapse=", ")))
+          colNew = setNames(rep(defaultColor, length(SNnew)), SNnew) 
+          EXPcol = c(FlagsExp$EXPcol, colNew)
+          EXPcol[names(EXPcol) == ""] <- "white"
+          FlagsExp$EXPcol <- EXPcol
+        } else {
+          print("No new SNs to update.")
+        }
       }
+      
+      # Aggiorna la tabella con i nuovi colori.
+      ExpDataTable = Result$TablePlot$x$data
+      completeExpDataTable = cbind(Result$Initdata, Result[[grep(x=names(Result), pattern = "cell_SN", value = TRUE)]])
+      colnames(completeExpDataTable) = colnames(ExpDataTable)
+      
+      cols.color = grep(x = colnames(ExpDataTable), pattern = "Col", value = TRUE)
+      cols.keep = grep(x = colnames(ExpDataTable), pattern = "V", value = TRUE)
+      
+      Result$TablePlot = datatable(completeExpDataTable,
+                                   filter = 'none',
+                                   selection = list(mode = 'single', target = 'cell'),
+                                   rownames = FALSE,
+                                   options = list(
+                                     dom = 't',
+                                     pageLength = -1,
+                                     info = FALSE,
+                                     columnDefs = list(list(targets = cols.color, visible = FALSE))
+                                   )) %>%
+        formatStyle(cols.keep,
+                    cols.color,
+                    backgroundColor = styleEqual(names(FlagsExp$EXPcol), FlagsExp$EXPcol))
+      
+      print("Table and colors updated.")
     }
-    
-    ExpDataTable = Result$TablePlot$x$data
-    completeExpDataTable = cbind(Result$Initdata, Result[[grep(x=names(Result), pattern = "cell_SN", value = TRUE)]])
-    colnames(completeExpDataTable) = colnames(ExpDataTable)
-    
-    cols.color = grep(x = colnames(ExpDataTable), pattern = "Col", value = TRUE)
-    cols.keep = grep(x = colnames(ExpDataTable), pattern = "V", value = TRUE)
-    
-    Result$TablePlot = datatable(completeExpDataTable,
-                                 filter = 'none',
-                                 selection = list(mode = 'single', target = 'cell'),
-                                 rownames = FALSE,
-                                 options = list(
-                                   dom = 't',
-                                   pageLength = -1,
-                                   info = FALSE,
-                                   columnDefs = list(list(targets = cols.color, visible = FALSE))
-                                 )) %>%
-      formatStyle(cols.keep,
-                  cols.color,
-                  backgroundColor = styleEqual(names(FlagsExp$EXPcol), FlagsExp$EXPcol))
-    
-    print("Table and colors updated.")
-  } else if(type == "Update_new") {
-    defaultColor <- "#49ff00"  
-    
-    if(is.null(FlagsExp$EXPcol)) {
-      print("No existing color mapping found. Creating new one.")
-      EXPcol = setNames(rep(defaultColor, length(FlagsExp$AllExp)), FlagsExp$AllExp)
-      EXPcol[names(EXPcol) == ""] <- "white"
-      FlagsExp$EXPcol <- EXPcol
-    } else {
-      print("Existing color mapping found. Updating if necessary.")
-      SNnew = FlagsExp$AllExp[!FlagsExp$AllExp %in% names(FlagsExp$EXPcol)]
-      if(length(SNnew) > 0) {
-        print(paste("New SNs found:", paste(SNnew, collapse=", ")))
-        colNew = setNames(rep(defaultColor, length(SNnew)), SNnew) 
-        EXPcol = c(FlagsExp$EXPcol, colNew)
-        EXPcol[names(EXPcol) == ""] <- "white"
-        FlagsExp$EXPcol <- EXPcol
-      } else {
-        print("No new SNs to update.")
-      }
-    }
-    
-    # Aggiorna la tabella con i nuovi colori.
-    ExpDataTable = Result$TablePlot$x$data
-    completeExpDataTable = cbind(Result$Initdata, Result[[grep(x=names(Result), pattern = "cell_SN", value = TRUE)]])
-    colnames(completeExpDataTable) = colnames(ExpDataTable)
-    
-    cols.color = grep(x = colnames(ExpDataTable), pattern = "Col", value = TRUE)
-    cols.keep = grep(x = colnames(ExpDataTable), pattern = "V", value = TRUE)
-    
-    Result$TablePlot = datatable(completeExpDataTable,
-                                 filter = 'none',
-                                 selection = list(mode = 'single', target = 'cell'),
-                                 rownames = FALSE,
-                                 options = list(
-                                   dom = 't',
-                                   pageLength = -1,
-                                   info = FALSE,
-                                   columnDefs = list(list(targets = cols.color, visible = FALSE))
-                                 )) %>%
-      formatStyle(cols.keep,
-                  cols.color,
-                  backgroundColor = styleEqual(names(FlagsExp$EXPcol), FlagsExp$EXPcol))
-    
-    print("Table and colors updated.")
-  }
+  )
 }
   

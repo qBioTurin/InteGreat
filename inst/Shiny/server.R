@@ -1318,6 +1318,12 @@ server <- function(input, output, session) {
     removeModal()
     if (input$shinyalert && alert$alertContext == "ENDOC-reset") {  
       resetPanel("ENDOC", flags = FlagsENDOC, result = endocResult)
+      updateCheckboxGroupInput(session, "ENDOC_baselines", choices = list(), selected = character(0))
+      updateCheckboxGroupInput(session, "ENDOC_blanks", choices = list(), selected = character(0))
+  
+      updateSelectizeInput(session, "ENDOCcell_SN", choices = character(0), selected = character(0))
+      updateSelectizeInput(session, "ENDOCcell_TIME", choices = character(0), selected = character(0))
+      
       loadExcelFileENDOC()
     }
   })
