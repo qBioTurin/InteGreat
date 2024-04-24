@@ -551,6 +551,11 @@ ui <- dashboardPage(
                                                  "Select blank:")
                        )
                      )
+                )
+              ),
+              fluidRow(
+                column(6, dataTableOutput("leftTable")),
+                column(6, dataTableOutput("rightTable"))
               ),
               fluidRow(
                 column(width = 1,offset = 9,
@@ -562,7 +567,6 @@ ui <- dashboardPage(
               )
           ),
           plotOutput("ENDOCinitplots")
-        )
       ),
       # Second tab content
       tabItem(tabName = "tablesENDOC",

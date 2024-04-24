@@ -1349,7 +1349,6 @@ server <- function(input, output, session) {
       } else {
         endocResult$Initdata = mess$x
         FlagsENDOC$EXPcol = mess$fill
-        FlagsENDOC$EXPcol$selected <- "#e5be01"
         endocResult$ENDOCcell_SN = mess$SNtable
         
         removeModal()
@@ -1381,18 +1380,65 @@ server <- function(input, output, session) {
       
       color_styles <- sapply(color_codes, function(color_code) {
         text_color <- if (grepl("^(#FFFFFF|#FFC000|#FFFF00|#D6D6D6|#EBEBEB)", color_code, ignore.case = TRUE)) "#000000" else "#FFFFFF"
-        paste0("background-color: ", color_code, "; color: ", color_code, ";")
+        paste0("background-color: ", color_code, "; color: ", text_color, ";")
       })
       
       updatePickerInput(session, "colorDropdown",
                         choices = color_names,
                         options = list(`style` = "width: 100px;"),
                         choicesOpt = list(
-                          elementId = color_names, 
+                          elementId = color_names,
                           style = color_styles
                         ),
                         selected = NULL
       )
+    })
+    
+    observe({
+      color_codes <- FlagsENDOC$EXPcol
+      color_names <- names(FlagsENDOC$EXPcol)
+      
+      valid_colors <- color_codes != "white"
+      color_codes <- color_codes[valid_colors]
+      color_names <- color_names[valid_colors]
+      
+      mid_point <- ceiling(length(color_codes) / 2)
+      left_colors <- color_codes[1:mid_point]
+      right_colors <- color_codes[(mid_point+1):length(color_codes)]
+      
+      left_data <- data.frame(
+        Color = sprintf("<div style='background-color: %s; padding: 10px;'></div>", left_colors),
+        Values = rep("Testo di prova", length(left_colors)),
+        Name = "-"
+      )
+      right_data <- data.frame(
+        Color = sprintf("<div style='background-color: %s; padding: 10px;'></div>", right_colors),
+        Values = rep("Testo di prova", length(right_colors)),
+        Name = "-"
+      )
+      
+      output$leftTable <- renderDataTable(left_data, escape = FALSE, options = list(
+        dom = 't',
+        paging = FALSE,
+        info = FALSE,
+        searching = FALSE,  
+        columnDefs = list(
+          list(width = '10px', targets = 0),
+          list(width = '10px', targets = 1),
+          list(className = 'dt-head-left dt-body-left', targets = 1)
+        )
+      ))
+      output$rightTable <- renderDataTable(right_data, escape = FALSE, options = list(
+        dom = 't',
+        paging = FALSE,
+        info = FALSE,
+        searching = FALSE,  
+        columnDefs = list(
+          list(width = '10px', targets = 0),
+          list(width = '10px', targets = 1),
+          list(className = 'dt-head-left dt-body-left', targets = 1)
+        )
+      ))
     })
   }
   
@@ -1491,12 +1537,7 @@ server <- function(input, output, session) {
             FlagsENDOC$AllExp <- exp
           }
         }
-        
-        tableExcelColored(session = session,
-                          Result = endocResult, 
-                          FlagsExp = FlagsENDOC,
-                          type = "Update_new")
-        output$ENDOCmatrix <- renderDataTable({endocResult$TablePlot})
+
       }
     } else showAlert("Error", "please, select before a row color", "error", 5000)
   }, ignoreInit = TRUE, ignoreNULL = TRUE)

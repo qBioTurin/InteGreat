@@ -462,51 +462,6 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
                     backgroundColor = styleEqual(names(FlagsExp$EXPcol), FlagsExp$EXPcol))
       
       print("Table and colors updated.")
-    }, "Update_new" =  {
-      defaultColor <- "#49ff00"  
-      
-      if(is.null(FlagsExp$EXPcol)) {
-        print("No existing color mapping found. Creating new one.")
-        EXPcol = setNames(rep(defaultColor, length(FlagsExp$AllExp)), FlagsExp$AllExp)
-        EXPcol[names(EXPcol) == ""] <- "white"
-        FlagsExp$EXPcol <- EXPcol
-      } else {
-        print("Existing color mapping found. Updating if necessary.")
-        SNnew = FlagsExp$AllExp[!FlagsExp$AllExp %in% names(FlagsExp$EXPcol)]
-        if(length(SNnew) > 0) {
-          print(paste("New SNs found:", paste(SNnew, collapse=", ")))
-          colNew = setNames(rep(defaultColor, length(SNnew)), SNnew) 
-          EXPcol = c(FlagsExp$EXPcol, colNew)
-          EXPcol[names(EXPcol) == ""] <- "white"
-          FlagsExp$EXPcol <- EXPcol
-        } else {
-          print("No new SNs to update.")
-        }
-      }
-      
-      # Aggiorna la tabella con i nuovi colori.
-      ExpDataTable = Result$TablePlot$x$data
-      completeExpDataTable = cbind(Result$Initdata, Result[[grep(x=names(Result), pattern = "cell_SN", value = TRUE)]])
-      colnames(completeExpDataTable) = colnames(ExpDataTable)
-      
-      cols.color = grep(x = colnames(ExpDataTable), pattern = "Col", value = TRUE)
-      cols.keep = grep(x = colnames(ExpDataTable), pattern = "V", value = TRUE)
-      
-      Result$TablePlot = datatable(completeExpDataTable,
-                                   filter = 'none',
-                                   selection = list(mode = 'single', target = 'cell'),
-                                   rownames = FALSE,
-                                   options = list(
-                                     dom = 't',
-                                     pageLength = -1,
-                                     info = FALSE,
-                                     columnDefs = list(list(targets = cols.color, visible = FALSE))
-                                   )) %>%
-        formatStyle(cols.keep,
-                    cols.color,
-                    backgroundColor = styleEqual(names(FlagsExp$EXPcol), FlagsExp$EXPcol))
-      
-      print("Table and colors updated.")
     }
   )
 }
