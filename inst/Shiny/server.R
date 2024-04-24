@@ -1365,23 +1365,6 @@ server <- function(input, output, session) {
                         Result = endocResult, 
                         FlagsExp = FlagsENDOC,
                         type = "Initialize")
-      
-      output$ENDOCmatrix <- renderDT({
-        datatable(endocResult$TablePlot, options = list(
-          initComplete = JS(
-            "function(settings, json) {",
-            "  console.log('DataTable initialized.');",
-            "  $(this.api().table().body()).find('td').each(function(){",
-            "    console.log('Cell text:', $(this).text());",
-            "    if($(this).text() === 'selected') {",
-            "      console.log('Selected found.');",
-            "      $(this).css({'border': '2px solid red'});",
-            "    }",
-            "  });",
-            "}"
-          )
-        ))
-      }, escape = FALSE)
     }
   })
   

@@ -384,6 +384,11 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
                                selection = list(mode = 'single', target = 'cell'),
                                rownames= FALSE,
                                options = list(
+                                 initComplete = JS(
+                                   "function(settings, json) {",
+                                   # "$(this.api().table().header()).css({'background-color': '#000', 'color': '#fff'});",
+                                   "console.log(`data info`);",
+                                   "}"),
                                  dom = 't',
                                  pageLength = -1,
                                  info = FALSE,
