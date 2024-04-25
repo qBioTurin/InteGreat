@@ -327,7 +327,6 @@ server <- function(input, output, session) {
       
       tempRdsPath <- file.path(tempDir, nomeRDS)
       tempXlsxPath <- file.path(tempDir, nomeXLSX)
-      
       results <- DataAnalysisModule$wbResult
       saveRDS(results, file = tempRdsPath)
       saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "WB", PanelStructures)
@@ -1401,41 +1400,78 @@ server <- function(input, output, session) {
       valid_colors <- color_codes != "white"
       color_codes <- color_codes[valid_colors]
       color_names <- color_names[valid_colors]
-      
+    
       mid_point <- ceiling(length(color_codes) / 2)
       left_colors <- color_codes[1:mid_point]
       right_colors <- color_codes[(mid_point+1):length(color_codes)]
       
-      left_data <- data.frame(
-        Color = sprintf("<div style='background-color: %s; padding: 10px;'></div>", left_colors),
-        Values = rep("Testo di prova", length(left_colors)),
-        Name = "-"
-      )
-      right_data <- data.frame(
-        Color = sprintf("<div style='background-color: %s; padding: 10px;'></div>", right_colors),
-        Values = rep("Testo di prova", length(right_colors)),
-        Name = "-"
-      )
+      get_formatted_data <- function(colors, color_names) {
+        if (length(colors) == 0) {
+          return(data.frame(Color = character(), Values = character(), Name = character()))
+        }
+        formatted_data <- vector("list", length(colors))
+        for (i in seq_along(colors)) {
+          matching_indices <- which(endocResult$ENDOCcell_SN == color_names[i], arr.ind = TRUE)
+          if (nrow(matching_indices) > 0) {
+            selected_values <- apply(matching_indices, 1, function(idx) {
+              endocResult$Initdata[idx["row"], idx["col"]]
+            })
+            formatted_output <- paste(unlist(selected_values), collapse = " - ")
+            formatted_data[[i]] <- data.frame(
+              Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
+              Values = formatted_output,
+              Name = color_names[i]
+            )
+          } else {
+            formatted_data[[i]] <- data.frame(
+              Color = sprintf("<div style='background-color: %s; padding: 10px;'></div>", colors[i]),
+              Values = "No matching indices found.",
+              Name = color_names[i]
+            )
+          }
+        }
+        return(do.call(rbind, formatted_data))
+      }
       
-      output$leftTable <- renderDataTable(left_data, escape = FALSE, options = list(
+      left_data <- get_formatted_data(left_colors, color_names[1:mid_point])
+      right_data <- get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)])
+      
+      # Aggiungi qui la stampa della struttura
+      print("Left Data Structure:")
+      print(str(left_data))
+      print("Right Data Structure:")
+      print(str(right_data))
+      
+      output$leftTable <- renderDataTable(
+        left_data, escape = FALSE, 
+        editable = list(target = "cell", 
+                   disable = list(columns = 0:1)),
+        options = list(
         dom = 't',
         paging = FALSE,
         info = FALSE,
-        searching = FALSE,  
+        searching = FALSE, 
         columnDefs = list(
           list(width = '10px', targets = 0),
           list(width = '10px', targets = 1),
+          list(width = '200px', targets = 2),
           list(className = 'dt-head-left dt-body-left', targets = 1)
         )
       ))
-      output$rightTable <- renderDataTable(right_data, escape = FALSE, options = list(
+      output$rightTable <- renderDataTable(
+        left_data, escape = FALSE, 
+        editable = list(target = "cell", 
+                        disable = list(columns = 0:1)),
+        options = list(
         dom = 't',
         paging = FALSE,
         info = FALSE,
-        searching = FALSE,  
+        searching = FALSE,
+        editable= TRUE,
         columnDefs = list(
           list(width = '10px', targets = 0),
           list(width = '10px', targets = 1),
+          list(width = '200px', targets = 2),
           list(className = 'dt-head-left dt-body-left', targets = 1)
         )
       ))
