@@ -1366,6 +1366,9 @@ server <- function(input, output, session) {
     }
   })
   
+  left_data <- reactiveVal()
+  right_data <- reactiveVal()
+  
   loadEndocColor <- function() {
     observe({
       color_names <- names(FlagsENDOC$EXPcol)
@@ -1393,6 +1396,37 @@ server <- function(input, output, session) {
       )
     })
     
+    get_formatted_data <- function(colors, color_names) {
+      if (length(colors) == 0) {
+        return(data.frame(Color = character(), Values = character(), Name = character(), ColorCode = character()))
+      }
+      formatted_data <- vector("list", length(colors))
+      for (i in seq_along(colors)) {
+        matching_indices <- which(endocResult$ENDOCcell_SN == color_names[i], arr.ind = TRUE)
+        if (nrow(matching_indices) > 0) {
+          selected_values <- apply(matching_indices, 1, function(idx) {
+            endocResult$Initdata[idx["row"], idx["col"]]
+          })
+          formatted_output <- paste(unlist(selected_values), collapse = " - ")
+          formatted_data[[i]] <- data.frame(
+            Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
+            Values = formatted_output,
+            Name = "-",
+            ColorCode = color_names[i]  # Use color names instead of color codes
+          )
+        } else {
+          formatted_data[[i]] <- data.frame(
+            Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
+            Values = "No matching indices found.",
+            Name = "-",
+            ColorCode = color_names[i]  # Use color names instead of color codes
+          )
+        }
+      }
+      return(do.call(rbind, formatted_data))
+    }
+    
+    
     observe({
       color_codes <- FlagsENDOC$EXPcol
       color_names <- names(FlagsENDOC$EXPcol)
@@ -1400,84 +1434,108 @@ server <- function(input, output, session) {
       valid_colors <- color_codes != "white"
       color_codes <- color_codes[valid_colors]
       color_names <- color_names[valid_colors]
-    
+      
       mid_point <- ceiling(length(color_codes) / 2)
       left_colors <- color_codes[1:mid_point]
       right_colors <- color_codes[(mid_point+1):length(color_codes)]
       
-      get_formatted_data <- function(colors, color_names) {
-        if (length(colors) == 0) {
-          return(data.frame(Color = character(), Values = character(), Name = character()))
-        }
-        formatted_data <- vector("list", length(colors))
-        for (i in seq_along(colors)) {
-          matching_indices <- which(endocResult$ENDOCcell_SN == color_names[i], arr.ind = TRUE)
-          if (nrow(matching_indices) > 0) {
-            selected_values <- apply(matching_indices, 1, function(idx) {
-              endocResult$Initdata[idx["row"], idx["col"]]
-            })
-            formatted_output <- paste(unlist(selected_values), collapse = " - ")
-            formatted_data[[i]] <- data.frame(
-              Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
-              Values = formatted_output,
-              Name = color_names[i]
-            )
-          } else {
-            formatted_data[[i]] <- data.frame(
-              Color = sprintf("<div style='background-color: %s; padding: 10px;'></div>", colors[i]),
-              Values = "No matching indices found.",
-              Name = color_names[i]
-            )
-          }
-        }
-        return(do.call(rbind, formatted_data))
-      }
-      
-      left_data <- get_formatted_data(left_colors, color_names[1:mid_point])
-      right_data <- get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)])
-      
-      # Aggiungi qui la stampa della struttura
-      print("Left Data Structure:")
-      print(str(left_data))
-      print("Right Data Structure:")
-      print(str(right_data))
+      # Aggiornamento delle variabili reattive con i nuovi dati
+      left_data(get_formatted_data(left_colors, color_names[1:mid_point]))
+      right_data(get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)]))
       
       output$leftTable <- renderDataTable(
-        left_data, escape = FALSE, 
-        editable = list(target = "cell", 
-                   disable = list(columns = 0:1)),
+        left_data(),  # Assicurati di usare le parentesi
+        escape = FALSE, 
+        editable = list(target = "cell", disable = list(columns = 0:1)),
         options = list(
-        dom = 't',
-        paging = FALSE,
-        info = FALSE,
-        searching = FALSE, 
-        columnDefs = list(
-          list(width = '10px', targets = 0),
-          list(width = '10px', targets = 1),
-          list(width = '200px', targets = 2),
-          list(className = 'dt-head-left dt-body-left', targets = 1)
+          dom = 't',
+          paging = FALSE,
+          info = FALSE,
+          searching = FALSE, 
+          columnDefs = list(
+            list(targets = 4, visible = FALSE),
+            list(width = '10px', targets = 0),
+            list(width = '10px', targets = 1),
+            list(width = '200px', targets = 2),
+            list(className = 'dt-head-left dt-body-left', targets = 1)
+          )
         )
-      ))
+      )
       output$rightTable <- renderDataTable(
-        left_data, escape = FALSE, 
-        editable = list(target = "cell", 
-                        disable = list(columns = 0:1)),
+        right_data(),  # Assicurati di usare le parentesi
+        escape = FALSE, 
+        editable = list(target = "cell", disable = list(columns = 0:1)),
         options = list(
-        dom = 't',
-        paging = FALSE,
-        info = FALSE,
-        searching = FALSE,
-        editable= TRUE,
-        columnDefs = list(
-          list(width = '10px', targets = 0),
-          list(width = '10px', targets = 1),
-          list(width = '200px', targets = 2),
-          list(className = 'dt-head-left dt-body-left', targets = 1)
+          dom = 't',
+          paging = FALSE,
+          info = FALSE,
+          searching = FALSE,
+          editable = TRUE,
+          columnDefs = list(
+            list(targets = 4, visible = FALSE),
+            list(width = '10px', targets = 0),
+            list(width = '10px', targets = 1),
+            list(width = '200px', targets = 2),
+            list(className = 'dt-head-left dt-body-left', targets = 1)
+          )
         )
-      ))
+      )
     })
   }
   
+  observeEvent(input$leftTable_cell_edit, {
+    info <- input$leftTable_cell_edit
+    req(info)  # Assicurati che info non sia NULL
+    
+    # Accedi ai dati della DataTable
+    data <- left_data()  # Assumi che left_data sia un reactiveVal o simile
+    selected_row <- info$row
+    selected_col <- info$col
+    new_value <- info$value
+    
+    # Assicurati di lavorare sulla colonna "Name"
+    if (selected_col == 3) {  # Assumi che la colonna "Name" sia la colonna 3
+      # Estrai il colore della cella dalla colonna "ColorCode"
+      color_code <- data[selected_row, "ColorCode"]
+      print(paste("Color code extracted:", color_code))
+      
+      if (!is.na(color_code) && color_code != "" && color_code != "white" && color_code != "#FFFFFF") {
+        matchingIndices <- which(endocResult$ENDOCcell_SN == color_code, arr.ind = TRUE)
+        print(paste("Matching indices found:", nrow(matchingIndices))) 
+        
+        if (nrow(matchingIndices) > 0) {
+          # Aggiorna lo stato o i dati in base a color_code
+          # apply(matchingIndices, 1, function(idx) {
+          #   endocResult$ENDOCcell_SN[idx["row"], idx["col"]] <- new_value
+          # })
+          
+          # Aggiorna FlagsENDOC$AllExp se necessario
+          if (!new_value %in% FlagsENDOC$AllExp) {
+            FlagsENDOC$AllExp <- unique(c(FlagsENDOC$AllExp, new_value))
+          }
+          
+          output$ENDOCSelectedValues <- renderText(paste("Updated Values with:", new_value))
+        } else {
+          output$ENDOCSelectedValues <- renderText("No matching indices found.")
+        }
+      } else {
+        output$ENDOCSelectedValues <- renderText("Invalid color code")
+      }
+    }
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  
+  # Ascolta le modifiche nella tabella destra
+  observeEvent(input$rightTable_cell_edit, {
+    info <- input$rightTable_cell_edit
+    data <- right_data()  # Usa la funzione reactive per accedere ai dati
+    row_number <- info$row
+    color_code <- data[row_number, "Color"]
+    
+    # Logica aggiuntiva per gestire le modifiche
+    print(paste("Edited Name in right table on row", row_number, "with color code", color_code))
+  })
+
   observeEvent(input$colorDropdown, {
     req(input$colorDropdown)
     
@@ -1543,44 +1601,62 @@ server <- function(input, output, session) {
     }
   })
   
-  observeEvent(input$ENDOCcell_SN, {
-    req(input$ENDOCcell_SN)  
-
-    selectedIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
-    if (nrow(selectedIndices) > 0) {
-      updates <- list()  
+  observeEvent(input$ENDOCmatrix_cell_clicked,{
+    if(length(input$ENDOCmatrix_cell_clicked)!=0){
+      cellSelected= as.numeric(input$ENDOCmatrix_cell_clicked)
+      FlagsENDOC$cellCoo = cellCoo = c(cellSelected[1],cellSelected[2]+1)
+      print(cellCoo)
+      print(endocResult$ENDOCcell_TIME[ cellCoo[1],cellCoo[2] ])
+      print(endocResult$ENDOCcell_SN[ cellCoo[1], cellCoo[2] ])
       
-      for (idx in seq_len(nrow(selectedIndices))) {
-        cellCoo <- c(selectedIndices[idx, "row"], selectedIndices[idx, "col"])
-        value.now <- input$ENDOCcell_SN
-        value.bef <- endocResult$ENDOCcell_SN[cellCoo[1], cellCoo[2]]
+      updateSelectizeInput(inputId = "ENDOCcell_TIME",
+                           selected = ifelse(is.null(endocResult$ENDOCcell_TIME[cellCoo[1],cellCoo[2]]),"",endocResult$ENDOCcell_TIME[cellCoo[1],cellCoo[2]])
+      )
+      
+      updateSelectizeInput(inputId = "ENDOCcell_SN",
+                           selected = ifelse(is.null(endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]]),
+                                             "",
+                                             endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]])
+      )
+    }
+  })
+  
+  observeEvent(input$ENDOCcell_SN,{
+    if(!is.null(endocResult$ENDOCcell_SN)){
+      ENDOCtb = endocResult$TablePlot
+      cellCoo = FlagsENDOC$cellCoo
+      if(!is.null(cellCoo)){
+        value.bef = endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]] 
+        value.now = input$ENDOCcell_SN
         
-        if (value.now != "" && value.now != value.bef) {
-          updates[[length(updates) + 1]] <- list(cellCoo = cellCoo, value = value.now)
-        }
-      }
-      
-      if (length(updates) > 0) {
-        for (update in updates) {
-          cellCoo <- update$cellCoo
-          value.now <- update$value
-          endocResult$ENDOCcell_SN[cellCoo[1], cellCoo[2]] <- value.now
-          endocResult$TablePlot$x$data[cellCoo[1], paste0("Col", cellCoo[2])] <- value.now
+        # if the value does not change or it is still "Color " then the matrix is not update
+        if( value.now != "" && value.now!=value.bef){
           
-          if (nzchar(value.now) && !value.now %in% FlagsENDOC$AllExp) {
-            exp <- unique(c(FlagsENDOC$AllExp, value.now))
-            exp <- exp[exp != ""]
-            FlagsENDOC$AllExp <- exp
+          endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]] = value.now
+          ENDOCtb$x$data[cellCoo[1],paste0("Col",cellCoo[2])] = value.now
+          
+          if(! input$ENDOCcell_SN %in% FlagsENDOC$AllExp){
+            exp = unique(c(FlagsENDOC$AllExp,input$ENDOCcell_SN))
+            #exp = exp[-grep(pattern = "^Color [1-9]",x = exp)]
+            FlagsENDOC$AllExp  = exp
+            print(FlagsENDOC$AllExp)
           }
+          
+          ## updating table and colors definition depending on the cell fill 
+          tableExcelColored(session = session,
+                            Result = endocResult, 
+                            FlagsExp = FlagsENDOC,
+                            type = "Update")
+          #####
+          output$ENDOCmatrix <-renderDataTable({endocResult$TablePlot})
         }
-
       }
-    } else showAlert("Error", "please, select before a row color", "error", 5000)
-  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    }
+  })
   
   ## update Baselines checkBox
   observeEvent(c(FlagsENDOC$AllExp,FlagsENDOC$BLANCHEselected),{
-    if(length(FlagsENDOC$AllExp) >= 1){
+    if(length(FlagsENDOC$AllExp) > 1){
       exp = FlagsENDOC$AllExp
       exp = exp[exp != ""]
       
@@ -1594,12 +1670,11 @@ server <- function(input, output, session) {
                                selected = exp_selec )
       
       FlagsENDOC$EXPselected = exp
-      
     }
   })
   
   observeEvent(c(FlagsENDOC$AllExp,FlagsENDOC$BASEselected),{
-    if(length(FlagsENDOC$AllExp) >= 1){
+    if(length(FlagsENDOC$AllExp) > 1){
       exp = FlagsENDOC$AllExp
       exp = exp[exp != ""]
       

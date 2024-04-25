@@ -386,8 +386,12 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
                                options = list(
                                  initComplete = JS(
                                    "function(settings, json) {",
-                                   # "$(this.api().table().header()).css({'background-color': '#000', 'color': '#fff'});",
-                                   "console.log(`data info`);",
+                                   "$(this.api().table().body()).find('td').each(function() {",
+                                   "  var bgColor = $(this).css('background-color');",
+                                   "  if (bgColor !== 'rgb(255, 255, 255)' && bgColor !== 'white') {", 
+                                   "    $(this).css({'border': '1px solid red'});",
+                                   "  }",
+                                   "});",
                                    "}"),
                                  dom = 't',
                                  pageLength = -1,
