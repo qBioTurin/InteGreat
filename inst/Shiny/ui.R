@@ -494,15 +494,6 @@ ui <- dashboardPage(
               ),
               column(width = 6,
                      fluidRow(
-                       column(8, offset = 2,
-                              tags$div(
-                                textOutput("ENDOCSelectedValues"),
-                                style = "font-size: 24px; text-align: center; color: #e5be01;
-                                         width: 100%; margin-top: 20px; margin-bottom: 20px;"
-                              )
-                       )
-                     ),
-                     fluidRow(
                        column(width = 4, 
                               pickerInput(inputId = "colorDropdown",
                                           label = "Choose a color:",
@@ -527,10 +518,10 @@ ui <- dashboardPage(
                           )
                        ,
                         column(width = 8, 
-                              selectizeInput("ENDOCcell_SN",
-                                             label = "Experimental condition:",
-                                             choices = "",
-                                             options = list(create = TRUE)),
+                               selectizeInput("ENDOCcell_SN",
+                                              label = "Experimental condition:",
+                                              choices = c(),  
+                                              options = list(create = TRUE, placeholder = 'Select or type', persist = FALSE))
                               )
                      ),
                      fluidRow(
@@ -551,6 +542,15 @@ ui <- dashboardPage(
                                                  "Select blank:")
                        )
                      )
+                )
+              ),
+              fluidRow(
+                column(8, offset = 2,
+                       tags$div(
+                         textOutput("ENDOCSelectedValues"),
+                         style = "font-size: 24px; text-align: center; color: green;
+                                             width: 100%; margin-top: 20px; margin-bottom: 20px;"
+                       )
                 )
               ),
               fluidRow(

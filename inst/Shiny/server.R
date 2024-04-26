@@ -1269,6 +1269,7 @@ server <- function(input, output, session) {
     dataFinal = NULL,
     ENDOCcell_TIME = NULL,
     ENDOCcell_SN = NULL,
+    ENDOCcell_EXP = NULL,
     MapBaseline = NULL,
     MapBlank = NULL)
   
@@ -1398,29 +1399,47 @@ server <- function(input, output, session) {
     
     get_formatted_data <- function(colors, color_names) {
       if (length(colors) == 0) {
-        return(data.frame(Color = character(), Values = character(), Name = character(), ColorCode = character()))
+        return(data.frame(Color = character(), Values = character(), ExperimentalCondition = character(), ColorCode = character()))
       }
+      
       formatted_data <- vector("list", length(colors))
       for (i in seq_along(colors)) {
         matching_indices <- which(endocResult$ENDOCcell_SN == color_names[i], arr.ind = TRUE)
+        
         if (nrow(matching_indices) > 0) {
           selected_values <- apply(matching_indices, 1, function(idx) {
             endocResult$Initdata[idx["row"], idx["col"]]
           })
           formatted_output <- paste(unlist(selected_values), collapse = " - ")
+          
+          # Raccogliamo i valori di EXP per gli indici corrispondenti
+          exp_values <- apply(matching_indices, 1, function(idx) {
+            endocResult$ENDOCcell_EXP[idx["row"], idx["col"]]
+          })
+        
+          # Verifica se tutti i valori di EXP nei match indices sono identici
+          if (length(unique(exp_values)) == 1) {
+            exp_condition <- ifelse(exp_values[1] == "" || is.na(exp_values[1]), "-", exp_values[1])
+            cat("EXP condition is consistent across indices: ", exp_condition, "\n")
+          } else {
+            exp_condition <- "No matching between values"
+            cat("EXP condition varies across indices\n")
+          }
+          
           formatted_data[[i]] <- data.frame(
             Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
             Values = formatted_output,
-            Name = "-",
-            ColorCode = color_names[i]  # Use color names instead of color codes
+            ExperimentalCondition = exp_condition,
+            ColorCode = color_names[i]
           )
         } else {
           formatted_data[[i]] <- data.frame(
             Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
             Values = "No matching indices found.",
-            Name = "-",
-            ColorCode = color_names[i]  # Use color names instead of color codes
+            ExperimentalCondition = "-",
+            ColorCode = color_names[i]
           )
+          cat("No matching indices for color:", color_names[i], "\n")
         }
       }
       return(do.call(rbind, formatted_data))
@@ -1453,7 +1472,7 @@ server <- function(input, output, session) {
           info = FALSE,
           searching = FALSE, 
           columnDefs = list(
-            list(targets = 4, visible = FALSE),
+            #list(targets = 4, visible = FALSE),
             list(width = '10px', targets = 0),
             list(width = '10px', targets = 1),
             list(width = '200px', targets = 2),
@@ -1472,7 +1491,7 @@ server <- function(input, output, session) {
           searching = FALSE,
           editable = TRUE,
           columnDefs = list(
-            list(targets = 4, visible = FALSE),
+            #list(targets = 4, visible = FALSE),
             list(width = '10px', targets = 0),
             list(width = '10px', targets = 1),
             list(width = '200px', targets = 2),
@@ -1483,12 +1502,12 @@ server <- function(input, output, session) {
     })
   }
   
-  observeEvent(input$leftTable_cell_edit, {
+ observeEvent(input$leftTable_cell_edit, {
     info <- input$leftTable_cell_edit
     req(info)  # Assicurati che info non sia NULL
     
     # Accedi ai dati della DataTable
-    data <- left_data()  # Assumi che left_data sia un reactiveVal o simile
+    data <- left_data()  # Controlla se dovrebbe essere right_data() se stai lavorando su rightTable
     selected_row <- info$row
     selected_col <- info$col
     new_value <- info$value
@@ -1497,24 +1516,83 @@ server <- function(input, output, session) {
     if (selected_col == 3) {  # Assumi che la colonna "Name" sia la colonna 3
       # Estrai il colore della cella dalla colonna "ColorCode"
       color_code <- data[selected_row, "ColorCode"]
-      print(paste("Color code extracted:", color_code))
       
       if (!is.na(color_code) && color_code != "" && color_code != "white" && color_code != "#FFFFFF") {
         matchingIndices <- which(endocResult$ENDOCcell_SN == color_code, arr.ind = TRUE)
-        print(paste("Matching indices found:", nrow(matchingIndices))) 
         
         if (nrow(matchingIndices) > 0) {
-          # Aggiorna lo stato o i dati in base a color_code
-          # apply(matchingIndices, 1, function(idx) {
-          #   endocResult$ENDOCcell_SN[idx["row"], idx["col"]] <- new_value
-          # })
+          # Prepara un vettore per raccogliere i valori correnti
+          currentValues <- c()
           
-          # Aggiorna FlagsENDOC$AllExp se necessario
+          # Aggiorna lo stato o i dati in base a color_code
+          apply(matchingIndices, 1, function(idx) {
+            currentValues <<- c(currentValues, endocResult$Initdata[idx["row"], idx["col"]])
+            old_value_key <- names(FlagsENDOC$EXPcol)[names(FlagsENDOC$EXPcol) == endocResult$ENDOCcell_SN[idx["row"], idx["col"]]]
+            if (length(old_value_key) > 0) {
+              FlagsENDOC$EXPcol[new_value] <- FlagsENDOC$EXPcol[old_value_key]
+              FlagsENDOC$EXPcol <- FlagsENDOC$EXPcol[!names(FlagsENDOC$EXPcol) %in% old_value_key]
+            }
+            endocResult$ENDOCcell_SN[idx["row"], idx["col"]] <- new_value
+            endocResult$ENDOCcell_EXP[idx["row"], idx["col"]] <- new_value
+          })
+          
           if (!new_value %in% FlagsENDOC$AllExp) {
             FlagsENDOC$AllExp <- unique(c(FlagsENDOC$AllExp, new_value))
           }
           
-          output$ENDOCSelectedValues <- renderText(paste("Updated Values with:", new_value))
+          output$ENDOCSelectedValues <- renderText(paste("Updated values", paste(currentValues, collapse = " - "), "with new value:", new_value))
+          print(endocResult$ENDOCcell_SN)
+          print(FlagsENDOC$EXPcol)
+        } else {
+          output$ENDOCSelectedValues <- renderText("No matching indices found.")
+        }
+      } else {
+        output$ENDOCSelectedValues <- renderText("Invalid color code")
+      }
+    }
+ }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  observeEvent(input$rightTable_cell_edit, {
+    info <- input$rightTable_cell_edit
+    req(info)  
+    
+    # Accedi ai dati della DataTable
+    data <- left_data()  # Controlla se dovrebbe essere right_data() se stai lavorando su rightTable
+    selected_row <- info$row
+    selected_col <- info$col
+    new_value <- info$value
+    
+    # Assicurati di lavorare sulla colonna "Name"
+    if (selected_col == 3) {  # Assumi che la colonna "Name" sia la colonna 3
+      # Estrai il colore della cella dalla colonna "ColorCode"
+      color_code <- data[selected_row, "ColorCode"]
+      
+      if (!is.na(color_code) && color_code != "" && color_code != "white" && color_code != "#FFFFFF") {
+        matchingIndices <- which(endocResult$ENDOCcell_SN == color_code, arr.ind = TRUE)
+        
+        if (nrow(matchingIndices) > 0) {
+          # Prepara un vettore per raccogliere i valori correnti
+          currentValues <- c()
+          
+          # Aggiorna lo stato o i dati in base a color_code
+          apply(matchingIndices, 1, function(idx) {
+            currentValues <<- c(currentValues, endocResult$Initdata[idx["row"], idx["col"]])
+            old_value_key <- names(FlagsENDOC$EXPcol)[names(FlagsENDOC$EXPcol) == endocResult$ENDOCcell_SN[idx["row"], idx["col"]]]
+            if (length(old_value_key) > 0) {
+              FlagsENDOC$EXPcol[new_value] <- FlagsENDOC$EXPcol[old_value_key]
+              FlagsENDOC$EXPcol <- FlagsENDOC$EXPcol[!names(FlagsENDOC$EXPcol) %in% old_value_key]
+            }
+            endocResult$ENDOCcell_SN[idx["row"], idx["col"]] <- new_value
+            endocResult$ENDOCcell_EXP[idx["row"], idx["col"]] <- new_value
+          })
+          
+          if (!new_value %in% FlagsENDOC$AllExp) {
+            FlagsENDOC$AllExp <- unique(c(FlagsENDOC$AllExp, new_value))
+          }
+          
+          output$ENDOCSelectedValues <- renderText(paste("Updated values", paste(currentValues, collapse = " - "), "with new value:", new_value))
+          print(endocResult$ENDOCcell_SN)
+          print(FlagsENDOC$EXPcol)
         } else {
           output$ENDOCSelectedValues <- renderText("No matching indices found.")
         }
@@ -1525,69 +1603,58 @@ server <- function(input, output, session) {
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   
-  # Ascolta le modifiche nella tabella destra
-  observeEvent(input$rightTable_cell_edit, {
-    info <- input$rightTable_cell_edit
-    data <- right_data()  # Usa la funzione reactive per accedere ai dati
-    row_number <- info$row
-    color_code <- data[row_number, "Color"]
-    
-    # Logica aggiuntiva per gestire le modifiche
-    print(paste("Edited Name in right table on row", row_number, "with color code", color_code))
-  })
-
-  observeEvent(input$colorDropdown, {
-    req(input$colorDropdown)
-    
-    selectedColorName <- input$colorDropdown
-
-    whiteKey <- names(FlagsENDOC$EXPcol)[FlagsENDOC$EXPcol == "white"]
-
-    if (exists("originalColor") && originalColor != "" && any(endocResult$ENDOCcell_SN == "selected")) {
-      originalIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
-
-      if (length(originalIndices) > 0) {
-        for (idx in 1:nrow(originalIndices)) {
-          endocResult$ENDOCcell_SN[originalIndices[idx, "row"], originalIndices[idx, "col"]] <- originalColor
-        }
-      }
-    }
-    
-    if (selectedColorName != "white" && selectedColorName != "#FFFFFF" && selectedColorName != whiteKey) {
-      matchingIndices <- which(endocResult$ENDOCcell_SN == selectedColorName, arr.ind = TRUE)
-
-      if (nrow(matchingIndices) > 0) {
-        originalColor <<- selectedColorName  
-        selectedValues <- apply(matchingIndices, 1, function(idx) {
-          endocResult$Initdata[idx["row"], idx["col"]]
-        })
-
-        selectedValuesVector <- unlist(selectedValues)
-        formattedOutput <- paste("Selected Values:", paste(selectedValuesVector, collapse = " - "))
-        output$ENDOCSelectedValues <- renderText({ formattedOutput })
-        
-        apply(matchingIndices, 1, function(idx) {
-          endocResult$ENDOCcell_SN[idx["row"], idx["col"]] <- "selected"
-          updateSelectizeInput(inputId = "ENDOCcell_TIME",
-                               selected = ifelse(is.null(endocResult$ENDOCcell_TIME[idx["row"], idx["col"]]),
-                                                 "",
-                                                 endocResult$ENDOCcell_TIME[idx["row"], idx["col"]])
-          )
-          updateSelectizeInput(inputId = "ENDOCcell_SN",
-                               selected = ifelse(is.null(endocResult$ENDOCcell_SN[idx["row"], idx["col"]]),
-                                                 "",
-                                                 endocResult$ENDOCcell_SN[idx["row"], idx["col"]])
-          )
-        })
-        endocResult$TablePlot <- NULL
-        invalidateLater(1000, session)
-      } else {
-        output$ENDOCSelectedValues <- renderText("No matching indices found.")
-      }
-    } else {
-      output$ENDOCSelectedValues <- renderText("No selected values")
-    }
-  })
+  # observeEvent(input$colorDropdown, {
+  #   req(input$colorDropdown)
+  #   
+  #   selectedColorName <- input$colorDropdown
+  # 
+  #   whiteKey <- names(FlagsENDOC$EXPcol)[FlagsENDOC$EXPcol == "white"]
+  # 
+  #   if (exists("originalColor") && originalColor != "" && any(endocResult$ENDOCcell_SN == "selected")) {
+  #     originalIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
+  # 
+  #     if (length(originalIndices) > 0) {
+  #       for (idx in 1:nrow(originalIndices)) {
+  #         endocResult$ENDOCcell_SN[originalIndices[idx, "row"], originalIndices[idx, "col"]] <- originalColor
+  #       }
+  #     }
+  #   }
+  #   
+  #   if (selectedColorName != "white" && selectedColorName != "#FFFFFF" && selectedColorName != whiteKey) {
+  #     matchingIndices <- which(endocResult$ENDOCcell_SN == selectedColorName, arr.ind = TRUE)
+  # 
+  #     if (nrow(matchingIndices) > 0) {
+  #       originalColor <<- selectedColorName  
+  #       selectedValues <- apply(matchingIndices, 1, function(idx) {
+  #         endocResult$Initdata[idx["row"], idx["col"]]
+  #       })
+  # 
+  #       selectedValuesVector <- unlist(selectedValues)
+  #       formattedOutput <- paste("Selected Values:", paste(selectedValuesVector, collapse = " - "))
+  #       output$ENDOCSelectedValues <- renderText({ formattedOutput })
+  #       
+  #       apply(matchingIndices, 1, function(idx) {
+  #         endocResult$ENDOCcell_SN[idx["row"], idx["col"]] <- "selected"
+  #         updateSelectizeInput(inputId = "ENDOCcell_TIME",
+  #                              selected = ifelse(is.null(endocResult$ENDOCcell_TIME[idx["row"], idx["col"]]),
+  #                                                "",
+  #                                                endocResult$ENDOCcell_TIME[idx["row"], idx["col"]])
+  #         )
+  #         updateSelectizeInput(inputId = "ENDOCcell_SN",
+  #                              selected = ifelse(is.null(endocResult$ENDOCcell_SN[idx["row"], idx["col"]]),
+  #                                                "",
+  #                                                endocResult$ENDOCcell_SN[idx["row"], idx["col"]])
+  #         )
+  #       })
+  #       endocResult$TablePlot <- NULL
+  #       invalidateLater(1000, session)
+  #     } else {
+  #       output$ENDOCSelectedValues <- renderText("No matching indices found.")
+  #     }
+  #   } else {
+  #     output$ENDOCSelectedValues <- renderText("No selected values")
+  #   }
+  # })
   
   observeEvent(input$ENDOCcell_TIME, {
     if (!is.null(endocResult$ENDOCcell_TIME)) {
@@ -1601,25 +1668,21 @@ server <- function(input, output, session) {
     }
   })
   
-  observeEvent(input$ENDOCmatrix_cell_clicked,{
-    if(length(input$ENDOCmatrix_cell_clicked)!=0){
-      cellSelected= as.numeric(input$ENDOCmatrix_cell_clicked)
-      FlagsENDOC$cellCoo = cellCoo = c(cellSelected[1],cellSelected[2]+1)
-      print(cellCoo)
-      print(endocResult$ENDOCcell_TIME[ cellCoo[1],cellCoo[2] ])
-      print(endocResult$ENDOCcell_SN[ cellCoo[1], cellCoo[2] ])
-      
-      updateSelectizeInput(inputId = "ENDOCcell_TIME",
-                           selected = ifelse(is.null(endocResult$ENDOCcell_TIME[cellCoo[1],cellCoo[2]]),"",endocResult$ENDOCcell_TIME[cellCoo[1],cellCoo[2]])
-      )
-      
-      updateSelectizeInput(inputId = "ENDOCcell_SN",
-                           selected = ifelse(is.null(endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]]),
-                                             "",
-                                             endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]])
-      )
-    }
+  observeEvent(input$ENDOCmatrix_cell_clicked, {
+    req(input$ENDOCmatrix_cell_clicked)  # Assicura che l'input non sia vuoto
+    
+    cellSelected = as.numeric(input$ENDOCmatrix_cell_clicked)
+    FlagsENDOC$cellCoo = cellCoo = c(cellSelected[1], cellSelected[2] + 1)
+    
+    # Ottieni e imposta il tempo
+    selectedTime = ifelse(is.null(endocResult$ENDOCcell_TIME[cellCoo[1], cellCoo[2]]), "", endocResult$ENDOCcell_TIME[cellCoo[1], cellCoo[2]])
+    updateSelectizeInput(inputId = "ENDOCcell_TIME", selected = selectedTime)
+    
+    # Ottieni e imposta la condizione sperimentale
+    selectedCondition = ifelse(is.null(endocResult$ENDOCcell_EXP[cellCoo[1], cellCoo[2]]), "", endocResult$ENDOCcell_EXP[cellCoo[1], cellCoo[2]])
+    updateSelectizeInput(inputId = "ENDOCcell_SN", selected = selectedCondition)
   })
+  
   
   observeEvent(input$ENDOCcell_SN,{
     if(!is.null(endocResult$ENDOCcell_SN)){
@@ -1631,15 +1694,16 @@ server <- function(input, output, session) {
         
         # if the value does not change or it is still "Color " then the matrix is not update
         if( value.now != "" && value.now!=value.bef){
+          currentValues <- endocResult$Initdata[cellCoo[1],cellCoo[2]]
           
           endocResult$ENDOCcell_SN[cellCoo[1],cellCoo[2]] = value.now
+          endocResult$ENDOCcell_EXP[cellCoo[1],cellCoo[2]] = value.now
           ENDOCtb$x$data[cellCoo[1],paste0("Col",cellCoo[2])] = value.now
           
           if(! input$ENDOCcell_SN %in% FlagsENDOC$AllExp){
             exp = unique(c(FlagsENDOC$AllExp,input$ENDOCcell_SN))
             #exp = exp[-grep(pattern = "^Color [1-9]",x = exp)]
             FlagsENDOC$AllExp  = exp
-            print(FlagsENDOC$AllExp)
           }
           
           ## updating table and colors definition depending on the cell fill 
@@ -1647,7 +1711,8 @@ server <- function(input, output, session) {
                             Result = endocResult, 
                             FlagsExp = FlagsENDOC,
                             type = "Update")
-          #####
+          
+          output$ENDOCSelectedValues <- renderText(paste("Updated value", paste(currentValues), "with new experimental condition: ", value.now))
           output$ENDOCmatrix <-renderDataTable({endocResult$TablePlot})
         }
       }
