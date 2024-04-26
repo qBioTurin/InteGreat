@@ -494,63 +494,40 @@ ui <- dashboardPage(
               ),
               column(width = 6,
                      fluidRow(
-                       column(width = 4, 
-                              pickerInput(inputId = "colorDropdown",
-                                          label = "Choose a color:",
-                                          choices = "",
-                                          options = list(style = "background-color: #00ff00; color: black;")
-                              ), 
-                              tags$style(HTML("
-                                #colorDropdown .btn.dropdown-toggle {
-                                    background-color: #00ff00;
-                                    color: black;
-                                }
-                                #colorDropdown .btn.dropdown-toggle:focus, 
-                                #colorDropdown .btn.dropdown-toggle:hover {
-                                    background-color: #00ff00;
-                                    color: black;
-                                    box-shadow: none;
-                                }
-                                #colorDropdown .filter-option-inner-inner {
-                                    color: black;
-                                }
-                            "))
-                          )
-                       ,
-                        column(width = 8, 
+                        column(width = 8, offset = 2,
                                selectizeInput("ENDOCcell_SN",
                                               label = "Experimental condition:",
                                               choices = c(),  
-                                              options = list(create = TRUE, placeholder = 'Select or type', persist = FALSE))
+                                              options = list(create = TRUE))
                               )
                      ),
                      fluidRow(
-                       column(width = 8, offset = 4,  
+                       column(width = 8, offset = 2,
                               selectizeInput("ENDOCcell_TIME",
                                              label = "Time:",
-                                             choices = "",
+                                             choices = c(),  
                                              options = list(create = TRUE))
                        )
                      ),
                      fluidRow(
-                       column(6,
+                       column(5, offset = 2,
                               checkboxGroupInput(inputId = "ENDOC_baselines",
                                                  "Select baselines:")
                        ),
-                       column(6,
+                       column(4, offset = 1,
                               checkboxGroupInput(inputId = "ENDOC_blanks",
                                                  "Select blank:")
                        )
-                     )
-                )
-              ),
-              fluidRow(
-                column(8, offset = 2,
-                       tags$div(
-                         textOutput("ENDOCSelectedValues"),
-                         style = "font-size: 24px; text-align: center; color: green;
-                                             width: 100%; margin-top: 20px; margin-bottom: 20px;"
+                     ),
+                     fluidRow(
+                       column(12,
+                              tags$div(
+                                textOutput("ENDOCSelectedValues"),
+                                style = "font-size: 24px; text-align: center; color: green;
+                                             width: 100%; margin-top: 20px;"
+                              )
                        )
+                     )
                 )
               ),
               fluidRow(

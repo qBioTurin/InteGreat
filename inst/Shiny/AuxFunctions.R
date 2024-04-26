@@ -388,7 +388,9 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
                                    "function(settings, json) {",
                                    "$(this.api().table().body()).find('td').each(function() {",
                                    "  var bgColor = $(this).css('background-color');",
-                                   "  if (bgColor !== 'rgb(255, 255, 255)' && bgColor !== 'white') {", 
+                                   "  if (bgColor === 'rgb(255, 255, 255)' || bgColor === 'white') {", 
+                                   "    $(this).addClass('non-clickable').css({'pointer-events': 'none'});",
+                                   "  } else {",
                                    "    $(this).css({'border': '1px solid red'});",
                                    "  }",
                                    "});",
@@ -421,7 +423,7 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
         Result[[grep(x=names(Result),pattern = "cell_TIME", value = T)]]<- cell_TIME
       
       Result$TablePlot = ExpDataTable
-    }, "Update" =  {
+  }, "Update" =  {
       ColorsSN = rainbow(n = 50, alpha = 0.5)[sample(50, size = 50, replace = FALSE)]
       
       if(is.null(FlagsExp$EXPcol)) {
