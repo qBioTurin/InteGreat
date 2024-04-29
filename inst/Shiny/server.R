@@ -1533,7 +1533,7 @@ server <- function(input, output, session) {
                             FlagsExp = FlagsENDOC,
                             type = "Update")
           
-          output$ENDOCSelectedValues <- renderText(paste("Updated values", paste(currentValues, collapse = " - "), ": experimental condition ", value.now))
+          output$ENDOCSelectedValues <- renderText(paste("Updated values", paste(currentValues, collapse = " - "), ": experimental condition ", new_value))
           output$ENDOCmatrix <-renderDataTable({endocResult$TablePlot})
         }
       }
@@ -1578,24 +1578,12 @@ server <- function(input, output, session) {
                             FlagsExp = FlagsENDOC,
                             type = "Update")
           
-          output$ENDOCSelectedValues <- renderText(paste("Updated values", paste(currentValues, collapse = " - "), ": experimental condition ", value.now))
+          output$ENDOCSelectedValues <- renderText(paste("Updated values", paste(currentValues, collapse = " - "), ": experimental condition ", new_value))
           output$ENDOCmatrix <-renderDataTable({endocResult$TablePlot})
         } 
       }
     }
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  observeEvent(input$ENDOCcell_TIME, {
-    if (!is.null(endocResult$ENDOCcell_TIME)) {
-      selectedIndices <- which(endocResult$ENDOCcell_SN == "selected", arr.ind = TRUE)
-      
-      if (nrow(selectedIndices) > 0) {
-        apply(selectedIndices, 1, function(idx) {
-          endocResult$ENDOCcell_TIME[idx["row"], idx["col"]] <- input$ENDOCcell_TIME
-        })
-      }
-    }
-  })
   
   observeEvent(input$ENDOCmatrix_cell_clicked, {
     req(input$ENDOCmatrix_cell_clicked)  
@@ -1603,8 +1591,12 @@ server <- function(input, output, session) {
     cellSelected = as.numeric(input$ENDOCmatrix_cell_clicked)
     FlagsENDOC$cellCoo = cellCoo = c(cellSelected[1], cellSelected[2] + 1)
     
-    selectedTime = ifelse(is.null(endocResult$ENDOCcell_TIME[cellCoo[1], cellCoo[2]]), "", endocResult$ENDOCcell_TIME[cellCoo[1], cellCoo[2]])
-    updateSelectizeInput(inputId = "ENDOCcell_TIME", selected = selectedTime)
+    allTime <- unique(na.omit(c(endocResult$ENDOCcell_TIME)))  
+    selectedTime <- ifelse(is.null(endocResult$ENDOCcell_TIME[cellCoo[1], cellCoo[2]]), "", endocResult$ENDOCcell_TIME[cellCoo[1], cellCoo[2]])
+    
+    updateSelectizeInput(inputId = "ENDOCcell_TIME", 
+                         choices = allTime,
+                         selected = selectedTime)
     
     allConditions <- unique(na.omit(c(endocResult$ENDOCcell_EXP)))  
     selectedCondition <- ifelse(is.null(endocResult$ENDOCcell_EXP[cellCoo[1], cellCoo[2]]), "", endocResult$ENDOCcell_EXP[cellCoo[1], cellCoo[2]])
@@ -1645,6 +1637,31 @@ server <- function(input, output, session) {
     } else return()
   }, ignoreInit = TRUE)
   
+  observeEvent(input$ENDOCcell_TIME, {
+    
+    if (!is.null(FlagsENDOC$cellCoo)) {
+      ENDOCtb = endocResult$TablePlot
+      cellCoo = FlagsENDOC$cellCoo
+      
+      value.bef = endocResult$ENDOCcell_TIME[cellCoo[1], cellCoo[2]] 
+      value.now = input$ENDOCcell_TIME
+    
+      if (value.now != "" && value.now != value.bef) {
+        currentValues <- endocResult$Initdata[cellCoo[1], cellCoo[2]]
+        
+        endocResult$ENDOCcell_TIME[cellCoo[1], cellCoo[2]] = value.now
+        print(FlagsENDOC$cellCoo)
+        tableExcelColored(session = session,
+                          Result = endocResult, 
+                          FlagsExp = FlagsENDOC,
+                          type = "Update",
+                          )
+        
+        output$ENDOCSelectedValues <- renderText(paste("Updated value", paste(currentValues), ": time ", value.now))
+        output$ENDOCmatrix <- renderDataTable({endocResult$TablePlot})
+      }
+    }
+  })
   
   ## update Baselines checkBox
   observeEvent(c(FlagsENDOC$AllExp,FlagsENDOC$BLANCHEselected),{

@@ -454,15 +454,29 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
       cols.keep = grep(x = colnames(ExpDataTable), pattern = "V", value = TRUE)
       
       Result$TablePlot = datatable(completeExpDataTable,
-                                   filter = 'none',
-                                   selection = list(mode = 'single', target = 'cell'),
-                                   rownames = FALSE,
-                                   options = list(
-                                     dom = 't',
-                                     pageLength = -1,
-                                     info = FALSE,
-                                     columnDefs = list(list(targets = cols.color, visible = FALSE))
-                                   )) %>%
+                               filter = 'none',
+                               #server = FALSE,
+                               selection = list(mode = 'single', target = 'cell'),
+                               rownames= FALSE,
+                               options = list(
+                                 initComplete = JS(
+                                   "function(settings, json) {",
+                                   "$(this.api().table().body()).find('td').each(function() {",
+                                   "  var bgColor = $(this).css('background-color');",
+                                   "  if (bgColor === 'rgb(255, 255, 255)' || bgColor === 'white') {", 
+                                   "    $(this).addClass('non-clickable').css({'pointer-events': 'none'});",
+                                   "  } else {",
+                                   "    $(this).css({'border': '1px solid red'});",
+                                   "  }",
+                                   "});",
+                                   "}"),
+                                 dom = 't',
+                                 pageLength = -1,
+                                 info = FALSE,
+                                 #scrollX = TRUE,
+                                 #lengthChange = FALSE,
+                                 columnDefs = list(list(targets = cols.color, visible = FALSE))
+                               )) %>%
         formatStyle(cols.keep,
                     cols.color,
                     backgroundColor = styleEqual(names(FlagsExp$EXPcol), FlagsExp$EXPcol))
