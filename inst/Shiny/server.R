@@ -1299,6 +1299,9 @@ server <- function(input, output, session) {
                                EXPselected = "",
                                EXPcol = NULL)
   
+  left_data <- reactiveVal()
+  right_data <- reactiveVal()
+  
   observeEvent(input$LoadENDOC_Button,{
     alert$alertContext <- "ENDOC-reset"
     if( !is.null(endocResult$Initdata) ) {
@@ -1324,6 +1327,8 @@ server <- function(input, output, session) {
       updateSelectizeInput(session, "ENDOCcell_SN", choices = character(0), selected = character(0))
       updateSelectizeInput(session, "ENDOCcell_TIME", choices = character(0), selected = character(0))
       
+      left_data <- NULL
+      right_data <- NULL
       loadExcelFileENDOC()
     }
   })
@@ -1352,7 +1357,6 @@ server <- function(input, output, session) {
         endocResult$ENDOCcell_SN = mess$SNtable
         
         removeModal()
-        loadEndocColor()
         showAlert("Success", "The RDs has been uploaded  with success", "success", 2000)
       }
   }
@@ -1366,35 +1370,6 @@ server <- function(input, output, session) {
                         type = "Initialize")
     }
   })
-  
-  left_data <- reactiveVal()
-  right_data <- reactiveVal()
-  
-  loadEndocColor <- function() {
-    observe({
-      color_names <- names(FlagsENDOC$EXPcol)
-      color_codes <- FlagsENDOC$EXPcol
-      
-      selected_color_index <- which(color_names == "selected" | color_codes == "#49ff00")
-      if (length(selected_color_index) > 0) {
-        color_names <- color_names[-selected_color_index]
-        color_codes <- color_codes[-selected_color_index]
-      }
-      
-      color_styles <- sapply(color_codes, function(color_code) {
-        text_color <- if (grepl("^(#FFFFFF|#FFC000|#FFFF00|#D6D6D6|#EBEBEB)", color_code, ignore.case = TRUE)) "#000000" else "#FFFFFF"
-      })
-      
-      updatePickerInput(session, "colorDropdown",
-                        choices = color_names,
-                        options = list(`style` = "width: 100px;"),
-                        choicesOpt = list(
-                          elementId = color_names,
-                          style = color_styles
-                        ),
-                        selected = NULL
-      )
-    })
     
     get_formatted_data <- function(colors, color_names) {
       if (length(colors) == 0) {
@@ -1422,17 +1397,19 @@ server <- function(input, output, session) {
           }
           
           formatted_data[[i]] <- data.frame(
+            ColorCode = color_names[i],
             Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
             Values = formatted_output,
             ExperimentalCondition = exp_condition,
-            ColorCode = color_names[i]
+            Time = "-"
           )
         } else {
           formatted_data[[i]] <- data.frame(
+            ColorCode = color_names[i],
             Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
             Values = "No matching indices found.",
             ExperimentalCondition = "-",
-            ColorCode = color_names[i]
+            Time = "-"
           )
         }
       }
@@ -1458,17 +1435,19 @@ server <- function(input, output, session) {
       output$leftTable <- renderDataTable(
         left_data(), 
         escape = FALSE, 
-        editable = list(target = "cell", disable = list(columns = 0:1)),
+        editable = list(target = "cell", disable = list(columns = 0:3)),
         options = list(
           dom = 't',
           paging = FALSE,
           info = FALSE,
           searching = FALSE, 
           columnDefs = list(
-            list(targets = 4, visible = FALSE),
-            list(width = '10px', targets = 0),
-            list(width = '10px', targets = 1),
-            list(width = '200px', targets = 2),
+            list(targets = 0, visible = FALSE),
+            list(targets = 1, visible = FALSE),
+            list(width = '10px', targets = 2),
+            list(width = '100px', targets = 3),
+            list(width = '100px', targets = 4),
+            list(width = '100px', targets = 5),
             list(className = 'dt-head-left dt-body-left', targets = 1)
           )
         )
@@ -1476,7 +1455,7 @@ server <- function(input, output, session) {
       output$rightTable <- renderDataTable(
         right_data(), 
         escape = FALSE, 
-        editable = list(target = "cell", disable = list(columns = 0:1)),
+        editable = list(target = "cell", disable = list(columns = 0:3)),
         options = list(
           dom = 't',
           paging = FALSE,
@@ -1484,16 +1463,18 @@ server <- function(input, output, session) {
           searching = FALSE,
           editable = TRUE,
           columnDefs = list(
-            list(targets = 4, visible = FALSE),
-            list(width = '10px', targets = 0),
-            list(width = '10px', targets = 1),
-            list(width = '200px', targets = 2),
+            list(targets = 0, visible = FALSE),
+            list(targets = 1, visible = FALSE),
+            list(width = '10px', targets = 2),
+            list(width = '100px', targets = 3),
+            list(width = '100px', targets = 4),
+            list(width = '100px', targets = 5),
             list(className = 'dt-head-left dt-body-left', targets = 1)
           )
         )
       )
     })
-  }
+
   
  observeEvent(input$leftTable_cell_edit, {
     info <- input$leftTable_cell_edit

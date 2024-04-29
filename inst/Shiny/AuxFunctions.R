@@ -390,8 +390,6 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
                                    "  var bgColor = $(this).css('background-color');",
                                    "  if (bgColor === 'rgb(255, 255, 255)' || bgColor === 'white') {", 
                                    "    $(this).addClass('non-clickable').css({'pointer-events': 'none'});",
-                                   "  } else {",
-                                   "    $(this).css({'border': '1px solid red'});",
                                    "  }",
                                    "});",
                                    "}"),
@@ -455,7 +453,6 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
       
       Result$TablePlot = datatable(completeExpDataTable,
                                filter = 'none',
-                               #server = FALSE,
                                selection = list(mode = 'single', target = 'cell'),
                                rownames= FALSE,
                                options = list(
@@ -465,16 +462,12 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
                                    "  var bgColor = $(this).css('background-color');",
                                    "  if (bgColor === 'rgb(255, 255, 255)' || bgColor === 'white') {", 
                                    "    $(this).addClass('non-clickable').css({'pointer-events': 'none'});",
-                                   "  } else {",
-                                   "    $(this).css({'border': '1px solid red'});",
                                    "  }",
                                    "});",
                                    "}"),
                                  dom = 't',
                                  pageLength = -1,
                                  info = FALSE,
-                                 #scrollX = TRUE,
-                                 #lengthChange = FALSE,
                                  columnDefs = list(list(targets = cols.color, visible = FALSE))
                                )) %>%
         formatStyle(cols.keep,
