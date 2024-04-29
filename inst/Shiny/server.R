@@ -1535,7 +1535,7 @@ server <- function(input, output, session) {
       numMatches <- nrow(matchingIndices)
       
       # Dividi il nuovo valore in base ai trattini
-      new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
+      new_values <- strsplit(gsub("\\s*-\\s*", "-", new_value), " - ", fixed = TRUE)[[1]]
       
       if (length(new_values) != numMatches || grepl("--", new_value)) {
         # Gestione errore: numero di valori non corrisponde o formato errato
