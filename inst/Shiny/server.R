@@ -1371,112 +1371,121 @@ server <- function(input, output, session) {
     }
   })
     
-    get_formatted_data <- function(colors, color_names) {
-      if (length(colors) == 0) {
-        return(data.frame(Color = character(), Values = character(), ExperimentalCondition = character(), ColorCode = character()))
-      }
-      
-      formatted_data <- vector("list", length(colors))
-      for (i in seq_along(colors)) {
-        matching_indices <- which(endocResult$ENDOCcell_SN == color_names[i], arr.ind = TRUE)
-        
-        if (nrow(matching_indices) > 0) {
-          selected_values <- apply(matching_indices, 1, function(idx) {
-            endocResult$Initdata[idx["row"], idx["col"]]
-          })
-          formatted_output <- paste(unlist(selected_values), collapse = " - ")
-          
-          exp_values <- apply(matching_indices, 1, function(idx) {
-            endocResult$ENDOCcell_EXP[idx["row"], idx["col"]]
-          })
-        
-          if (length(unique(exp_values)) == 1) {
-            exp_condition <- ifelse(exp_values[1] == "" || is.na(exp_values[1]), "-", exp_values[1])
-          } else {
-            exp_condition <- "No matching between values"
-          }
-          
-          formatted_data[[i]] <- data.frame(
-            ColorCode = color_names[i],
-            Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
-            Values = formatted_output,
-            ExperimentalCondition = exp_condition,
-            Time = "-"
-          )
-        } else {
-          formatted_data[[i]] <- data.frame(
-            ColorCode = color_names[i],
-            Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
-            Values = "No matching indices found.",
-            ExperimentalCondition = "-",
-            Time = "-"
-          )
-        }
-      }
-      return(do.call(rbind, formatted_data))
+  get_formatted_data <- function(colors, color_names) {
+    if (length(colors) == 0) {
+      return(data.frame(Color = character(), Values = character(), ExperimentalCondition = character(), ColorCode = character()))
     }
     
+    formatted_data <- vector("list", length(colors))
+    for (i in seq_along(colors)) {
+      # Trova gli indici corrispondenti al color_name attuale in endocCell_SN
+      matching_indices <- which(endocResult$ENDOCcell_SN == color_names[i], arr.ind = TRUE)
+      
+      if (nrow(matching_indices) > 0) {
+        selected_values <- apply(matching_indices, 1, function(idx) {
+          endocResult$Initdata[idx["row"], idx["col"]]
+        })
+        
+        formatted_output <- paste(unlist(selected_values), collapse = " - ")
+        
+        time_values <- apply(matching_indices, 1, function(idx) {
+          val <- endocResult$ENDOCcell_TIME[idx["row"], idx["col"]]
+          if (is.na(val) || val == "") "" else val
+        })
+        
+        time_output <- paste(unlist(time_values), collapse = " - ")
+        
+        exp_values <- apply(matching_indices, 1, function(idx) {
+          endocResult$ENDOCcell_EXP[idx["row"], idx["col"]]
+        })
+        
+        if (length(unique(exp_values)) == 1) {
+          exp_condition <- ifelse(exp_values[1] == "" || is.na(exp_values[1]), "-", exp_values[1])
+        } else {
+          exp_condition <- "No matching between values"
+        }
+        
+        formatted_data[[i]] <- data.frame(
+          ColorCode = color_names[i],
+          Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
+          Values = formatted_output,
+          ExperimentalCondition = exp_condition,
+          Time = ifelse(time_output == "", "-", time_output)  
+        )
+      } else {
+        formatted_data[[i]] <- data.frame(
+          ColorCode = color_names[i],
+          Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
+          Values = "No matching indices found.",
+          ExperimentalCondition = "-",
+          Time = "-"
+        )
+      }
+    }
+    return(do.call(rbind, formatted_data))
+  }
     
-    observe({
-      color_codes <- FlagsENDOC$EXPcol
-      color_names <- names(FlagsENDOC$EXPcol)
+    
+  observe({
+    color_codes <- FlagsENDOC$EXPcol
+    color_names <- names(FlagsENDOC$EXPcol)
+    
+    valid_colors <- color_codes != "white"
+    color_codes <- color_codes[valid_colors]
+    color_names <- color_names[valid_colors]
+    
+    mid_point <- ceiling(length(color_codes) / 2)
+    left_colors <- color_codes[1:mid_point]
+    right_colors <- color_codes[(mid_point+1):length(color_codes)]
+    
+    left_data(get_formatted_data(left_colors, color_names[1:mid_point]))
+    right_data(get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)]))
       
-      valid_colors <- color_codes != "white"
-      color_codes <- color_codes[valid_colors]
-      color_names <- color_names[valid_colors]
-      
-      mid_point <- ceiling(length(color_codes) / 2)
-      left_colors <- color_codes[1:mid_point]
-      right_colors <- color_codes[(mid_point+1):length(color_codes)]
-      
-      left_data(get_formatted_data(left_colors, color_names[1:mid_point]))
-      right_data(get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)]))
-      
-      output$leftTable <- renderDataTable(
-        left_data(), 
-        escape = FALSE, 
-        editable = list(target = "cell", disable = list(columns = 0:3)),
-        options = list(
-          dom = 't',
-          paging = FALSE,
-          info = FALSE,
-          searching = FALSE, 
-          columnDefs = list(
-            list(targets = 0, visible = FALSE),
-            list(targets = 1, visible = FALSE),
-            list(width = '10px', targets = 2),
-            list(width = '100px', targets = 3),
-            list(width = '100px', targets = 4),
-            list(width = '100px', targets = 5),
-            list(className = 'dt-head-left dt-body-left', targets = 1)
-          )
+    output$leftTable <- renderDataTable(
+      left_data(), 
+      escape = FALSE, 
+      editable = list(target = "cell", disable = list(columns = 0:3)),
+      options = list(
+        dom = 't',
+        paging = FALSE,
+        info = FALSE,
+        searching = FALSE, 
+        columnDefs = list(
+          list(targets = 0, visible = FALSE),
+          list(targets = 1, visible = FALSE),
+          list(width = '10px', targets = 2),
+          list(width = '100px', targets = 3),
+          list(width = '100px', targets = 4),
+          list(width = '100px', targets = 5),
+          list(className = 'dt-head-left dt-body-left', targets = 1)
         )
       )
-      output$rightTable <- renderDataTable(
-        right_data(), 
-        escape = FALSE, 
-        editable = list(target = "cell", disable = list(columns = 0:3)),
-        options = list(
-          dom = 't',
-          paging = FALSE,
-          info = FALSE,
-          searching = FALSE,
-          editable = TRUE,
-          columnDefs = list(
-            list(targets = 0, visible = FALSE),
-            list(targets = 1, visible = FALSE),
-            list(width = '10px', targets = 2),
-            list(width = '100px', targets = 3),
-            list(width = '100px', targets = 4),
-            list(width = '100px', targets = 5),
-            list(className = 'dt-head-left dt-body-left', targets = 1)
-          )
+    )
+    output$rightTable <- renderDataTable(
+      right_data(), 
+      escape = FALSE, 
+      editable = list(target = "cell", disable = list(columns = 0:3)),
+      options = list(
+        dom = 't',
+        paging = FALSE,
+        info = FALSE,
+        searching = FALSE,
+        editable = TRUE,
+        columnDefs = list(
+          list(targets = 0, visible = FALSE),
+          list(targets = 1, visible = FALSE),
+          list(width = '10px', targets = 2),
+          list(width = '100px', targets = 3),
+          list(width = '100px', targets = 4),
+          list(width = '100px', targets = 5),
+          list(className = 'dt-head-left dt-body-left', targets = 1)
         )
       )
-    })
+    )
+  })
 
   
- observeEvent(input$leftTable_cell_edit, {
+  observeEvent(input$leftTable_cell_edit, {
     info <- input$leftTable_cell_edit
     req(info)  
     
@@ -1485,7 +1494,7 @@ server <- function(input, output, session) {
     selected_col <- info$col
     new_value <- info$value
     
-    if (selected_col == 3) {  
+    if (selected_col == 4) {  
       color_code <- data[selected_row, "ColorCode"]
       
       if (!is.na(color_code) && color_code != "" && color_code != "white" && color_code != "#FFFFFF") {
@@ -1518,8 +1527,37 @@ server <- function(input, output, session) {
           output$ENDOCmatrix <-renderDataTable({endocResult$TablePlot})
         }
       }
+    } else if (selected_col == 5) {
+      color_code <- data[selected_row, "ColorCode"]
+      req(color_code != "", color_code != "white", color_code != "#FFFFFF")
+      
+      matchingIndices <- which(endocResult$ENDOCcell_SN == color_code, arr.ind = TRUE)
+      numMatches <- nrow(matchingIndices)
+      
+      # Dividi il nuovo valore in base ai trattini
+      new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
+      
+      if (length(new_values) != numMatches || grepl("--", new_value)) {
+        # Gestione errore: numero di valori non corrisponde o formato errato
+        session$sendCustomMessage(type = "errorNotification", 
+                                  message = "Number of values does not match the number of matches or format error.")
+      } else {
+        # Prosegui con l'aggiornamento dei dati se tutto è corretto
+        for (i in seq_along(matchingIndices[, "row"])) {
+          endocResult$ENDOCcell_TIME[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
+        }
+        
+        # Aggiorna i dati e la visualizzazione
+        tableExcelColored(session = session,
+                          Result = endocResult, 
+                          FlagsExp = FlagsENDOC,
+                          type = "Update")
+        
+        output$ENDOCSelectedValues <- renderText(paste("Updated values for experimental conditions:", paste(new_values, collapse = " - ")))
+        output$ENDOCmatrix <- renderDataTable({endocResult$TablePlot})
+      }
     }
- }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   observeEvent(input$rightTable_cell_edit, {
     info <- input$rightTable_cell_edit
