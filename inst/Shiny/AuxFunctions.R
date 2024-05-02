@@ -69,6 +69,18 @@ resetPanel <- function(type, flags = NULL, panelStructures = NULL, numberOfPlane
            flags$EXPselected <- NULL
            flags$EXPcol <- NULL
         },
+        "ELISA" = {
+          result$Initdata <- NULL
+          result$data <- NULL
+          result$TablePlot <- NULL
+          result$dataFinal <- NULL
+          result$ELISAcell_EXP <- NULL
+          result$ELISAcell_SN <- NULL
+          result$MapBaseline <- NULL
+          result$MapBlank <- NULL
+          result$Tablestandcurve <- NULL
+          result$Regression <- NULL
+        },
          error = function(cond) {
            showAlert("Error", "an error occured", "error", 5000)
          }

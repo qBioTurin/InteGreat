@@ -781,6 +781,7 @@ server <- function(input, output, session) {
       }
     }
   })
+  
   observeEvent(input$AUC_WBnorm_rows_selected,{
     if(!is.null(wbquantResult$NormWBanalysis)){
       indexesWB = input$AUC_WBnorm_rows_selected
@@ -1256,6 +1257,154 @@ server <- function(input, output, session) {
   
   #### END PCR analysis ####
   
+  #### ELISA analysis
+  observeEvent(input$NextElisaQuantif,{
+    updateTabsetPanel(session, "SideTabs",
+                      selected = "tablesELISA")
+  })
+  #
+  
+  elisaResult = reactiveValues(
+    Initdata= NULL,
+    data = NULL,
+    TablePlot = NULL,
+    dataFinal = NULL,
+    ELISAcell_EXP = NULL,
+    ELISAcell_SN = NULL,
+    MapBaseline = NULL,
+    MapBlank = NULL,
+    Tablestandcurve = NULL,
+    Regression = NULL)
+  
+  elisaResult0 = list(
+    Initdata= NULL,
+    data = NULL,
+    TablePlot = NULL,
+    dataFinal = NULL,
+    ELISAcell_EXP = NULL,
+    ELISAcell_SN = NULL,
+    MapBaseline = NULL,
+    MapBlank = NULL,
+    Tablestandcurve = NULL,
+    Regression = NULL)
+  
+  # save everytime there is a change in the results
+  ELISAresultListen <- reactive({
+    reactiveValuesToList(elisaResult)
+  })
+  observeEvent(ELISAresultListen(), {
+    DataAnalysisModule$elisaResult = reactiveValuesToList(elisaResult)
+    DataAnalysisModule$elisaResult$Flags = reactiveValuesToList(FlagsELISA)
+  })
+  
+  ##
+  FlagsELISA <- reactiveValues(cellCoo = NULL,
+                               AllExp = "",
+                               BASEselected = "",
+                               STDCselected = "",
+                               BLANCHEselected = "",
+                               EXPselected = "",
+                               EXPcol = NULL)
+  
+  observeEvent(input$LoadELISA_Button,{
+    alert$alertContext <- "ELISA-reset"
+    if( !is.null(elisaResult$Initdata) ) {
+      shinyalert(
+        title = "Important message",
+        text = "Do you want to update the ELISA data already present, by resetting the previous analysis?",
+        type = "warning",
+        showCancelButton = TRUE,
+        confirmButtonText = "Update",
+        cancelButtonText = "Cancel",
+      )
+    } else loadExcelFileELISA()
+  })
+  
+  observeEvent(input$shinyalert, {
+    removeModal()
+    if (input$shinyalert && alert$alertContext == "ELISA-reset") {  
+      resetPanel("ELISA", flags = FlagsELISA, result = elisaResult)
+      
+      loadExcelFileELISA()
+    }
+  })
+  
+  loadExcelFileELISA <- function() {
+    alert$alertContext <- ""
+    mess = readfile(
+      filename = input$ELISAImport$datapath,
+      isFileUploaded = !is.null(input$ELISAImport) && file.exists(input$ELISAImport$datapath),
+      type = "Excel",
+      allDouble = T,
+      colname = F,
+      colors = F
+    )
+    
+    if (setequal(names(mess), c("message", "call"))) {
+      showAlert("Error", mess[["message"]], "error", 5000)
+      return(NULL) 
+    }
+      
+    elisaResult$Initdata = mess
+    showAlert("Success", "The ELISA excel has been uploaded  with success", "success", 2000)
+  }
+  
+  observe({
+    if( !is.null(elisaResult$Initdata) && is.null(elisaResult$TablePlot) ){
+      ELISAtb = elisaResult$Initdata
+      
+      ELISAtb.colors = ELISAtb
+      ELISAtb.colors[,] = ""
+      mELISA  =cbind(ELISAtb,ELISAtb.colors)
+      
+      cols.keep <- paste0('V',1:length(ELISAtb[1,])) 
+      cols.color <- paste0('Col',1:length(ELISAtb[1,]))
+      
+      colnames(mELISA) = c(cols.keep,cols.color)
+      
+      ELISAtb = datatable(mELISA,
+                          filter = 'none',
+                          #server = FALSE,
+                          selection = list(mode = 'single', target = 'cell'),
+                          rownames= FALSE,
+                          options = list(
+                            #lengthChange = FALSE,
+                            #scrollX = TRUE,
+                            columnDefs = list(list(targets = cols.color, 
+                                                   visible = FALSE))
+                          )) %>%
+        formatStyle(cols.keep,
+                    cols.color,
+                    backgroundColor = styleEqual("", 'white'))
+      
+      ELISA = ELISAtb$x$data
+      
+      output$ELISAmatrix <-renderDataTable({ELISAtb} 
+                                           #options = list(scrollX = TRUE)
+      )
+      # renderDataTable(
+      #   ELISAtb,
+      #   #filter = 'none',
+      #   server = FALSE,
+      #   options=list(scrollX=T)
+      #   #selection = list(mode = 'single', target = 'cell'),
+      #   #options = list(lengthChange = FALSE ),
+      #   #rownames= FALSE
+      # )
+      
+      ELISAcell_SN <- ELISAcell_EXP <- matrix(
+        "",
+        nrow = length(ELISA[,1]),
+        ncol = length(ELISA[1,])
+      )
+      elisaResult$ELISAcell_SN <- ELISAcell_SN
+      elisaResult$ELISAcell_EXP<- ELISAcell_EXP
+      elisaResult$TablePlot = ELISAtb
+    }
+  })
+
+  #### END Elisa analysis
+  
   #### ENDOCYTOSIS analysis ####
   observeEvent(input$NextEndocQuantif,{
     updateTabsetPanel(session, "SideTabs",
@@ -1307,7 +1456,7 @@ server <- function(input, output, session) {
     if( !is.null(endocResult$Initdata) ) {
       shinyalert(
         title = "Important message",
-        text = "Do you want to update the WB data already present, by resetting the previous analysis?",
+        text = "Do you want to update the ENDOC data already present, by resetting the previous analysis?",
         type = "warning",
         showCancelButton = TRUE,
         confirmButtonText = "Update",
@@ -1315,7 +1464,6 @@ server <- function(input, output, session) {
       )
     } else loadExcelFileENDOC()
   })
-  
   
   observeEvent(input$shinyalert, {
     removeModal()
@@ -1346,7 +1494,6 @@ server <- function(input, output, session) {
         allDouble = T,
         colname = F,
         colors = T,
-        
       )
       
       if(setequal(names(mess), c("message", "call"))) {
@@ -1363,7 +1510,6 @@ server <- function(input, output, session) {
   
   observe({
     if (!is.null(endocResult$Initdata) && is.null(endocResult$TablePlot)) {
-      
       tableExcelColored(session = session,
                         Result = endocResult, 
                         FlagsExp = FlagsENDOC,
@@ -1461,6 +1607,7 @@ server <- function(input, output, session) {
         )
       )
     )
+    
     output$rightTable <- renderDataTable(
       right_data(), 
       escape = FALSE, 
@@ -1535,7 +1682,7 @@ server <- function(input, output, session) {
       numMatches <- nrow(matchingIndices)
       
       # Dividi il nuovo valore in base ai trattini
-      new_values <- strsplit(gsub("\\s*-\\s*", "-", new_value), " - ", fixed = TRUE)[[1]]
+      new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
       
       if (length(new_values) != numMatches || grepl("--", new_value)) {
         # Gestione errore: numero di valori non corrisponde o formato errato

@@ -455,6 +455,140 @@ ui <- dashboardPage(
       ),
       ## END data analysis:  RT-PCR 
       
+      ## START data analysis:  ELISA
+      tabItem(
+        tabName = "uploadELISA",
+        h2("Load ELISA data"),
+            fluidRow(
+              column(9,
+                fileInput(
+                  inputId = "ELISAImport",
+                  label = "",
+                  placeholder = "Select an Excel file.",
+                  width = "80%", 
+                  multiple = TRUE
+                )
+              ),
+              column(2,
+                     actionButton(
+                       label = "Load",
+                       style = "margin-top: 20px; width: 100%;",
+                       icon = shiny::icon("upload"),
+                       inputId = "LoadELISA_Button"
+                     )
+              ),
+              tags$style(type='text/css', "#loadAnalysis_Button { width:100%; margin-top: 20px;}")
+            ),
+        fluidRow(
+          box(width = 12,
+              title = "Assign experimental information to values:",
+              column(width = 6,
+                     dataTableOutput("ELISAmatrix")
+              ),
+              column(width = 6,
+                     selectizeInput("ELISAcell_SN",
+                                    label = "Sample name:",
+                                    choices = "",
+                                    options = list(create = TRUE)),
+                     selectizeInput("ELISAcell_EXP",label = "Experimental condition:",
+                                    choices = "",
+                                    options = list(create = TRUE)),
+                     fluidRow(
+                       column(4,
+                              selectizeInput(inputId = "ELISA_standcurve",
+                                             label = "Select standard curve:",
+                                             choices = NULL)
+                       ),
+                       column(4,
+                              checkboxGroupInput(inputId = "ELISA_baselines",
+                                                 "Select control:")
+                       ),
+                       column(4,
+                              checkboxGroupInput(inputId = "ELISA_blanks",
+                                                 "Select blank:")
+                       )
+                     )
+              ),
+              fluidRow(
+                column(width = 1,offset = 9,
+                       actionButton(inputId = "NextElisaQuantif",
+                                    label = 'Proceed to Quantification',
+                                    align = "right",
+                                    icon = shiny::icon("forward"))
+                )
+              )
+          )
+        )
+      ),
+      # Second tab content
+      tabItem(tabName = "tablesELISA",
+              h2("Quantification"),
+              fluidRow(
+                tags$head(tags$script(src = "message-handler.js")),
+                box(width = 12,
+                    title = "Regression of the standard curve:",
+                    collapsible = TRUE,
+                    fluidRow(column(4,
+                                    selectizeInput("regressionType",
+                                                   label="Select the regression model:",
+                                                   choices = c("Linear","Hyperbola"))
+                    ),
+                    column(3,
+                           actionButton(inputId = "ELISA_buttonRegression",
+                                        label = 'Calculate the regression',
+                                        align = "right")
+                    )
+                    ),
+                    fluidRow(
+                      column(6,
+                             DTOutput("ELISA_Table_stdcurve")
+                      ),
+                      column(6,
+                             plotOutput("ELISAregression")
+                      )
+                    )
+                ),
+                box(width= 12,
+                    title = "Select a blank for the following experimental conditions",
+                    collapsible = TRUE,
+                    collapsed = T,
+                    h4("If time information is associated with the experimental conditions
+                       defined as blank, then it will be lost during the averaging of its values."),
+                    uiOutput("ElisaBlankSelection")
+                ),
+                box(width= 12,
+                    title = "Select a baseline for the following experimental conditions",
+                    collapsible = TRUE,
+                    collapsed = T,
+                    uiOutput("ElisaBaselineSelection")
+                ),
+                box(width= 12,
+                    title = "Quantification",
+                    collapsible = TRUE,
+                    collapsed = TRUE,
+                    plotOutput("ELISAplots"),
+                    DTOutput("ELISAtables"),
+                    fluidRow(
+                      column(width = 1,offset = 9,
+                             downloadButton( label = "Download the RDs", 
+                                             outputId = "downloadButton_ELISA",
+                                             #href = "Results.RData",
+                                             #download = "Results.RData",
+                                             icon = icon("download") )
+                      ),
+                      column(width = 1,offset = 7,
+                             downloadButton( label = "Download xlsx", 
+                                             outputId = "downloadButtonExcel_ELISA",
+                                             #href = "Results.RData",
+                                             #download = "Results.RData",
+                                             icon = icon("download") )
+                      )
+                    )
+                )
+              )
+      ),
+      ## END data analysis: ELISA
+      
       ## START data analysis:  endocytosis
       tabItem(
         tabName = "uploadENDOC",
