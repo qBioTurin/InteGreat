@@ -376,7 +376,11 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
         ExpDataTable.colors = matrix("",nrow = nrow(ExpDataTable),ncol=ncol(ExpDataTable))
       }else{
         ExpDataTable.colors = Result[[grep(x=names(Result), pattern = "cell_SN", value = T)]]
+        if(is.null(ExpDataTable.colors) || nrow(ExpDataTable.colors) != nrow(ExpDataTable)) {
+          ExpDataTable.colors = matrix("", nrow = nrow(ExpDataTable), ncol = ncol(ExpDataTable))
+        }
       }
+      
       completeExpDataTable = cbind(ExpDataTable,ExpDataTable.colors)
       
       cols.keep <- paste0('V',1:length(ExpDataTable[1,])) 
@@ -389,7 +393,6 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
       }else{
         EXPcol = FlagsExp$EXPcol
       }
-      
       ExpDataTable = datatable(completeExpDataTable,
                                filter = 'none',
                                #server = FALSE,
@@ -415,7 +418,6 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
         formatStyle(cols.keep,
                     cols.color,
                     backgroundColor = styleEqual(names(EXPcol), EXPcol) )
-      
       cell_SN <- ExpDataTable.colors
       cell_TIME <- cell_EXP <- cell_REP <- matrix(
         "",

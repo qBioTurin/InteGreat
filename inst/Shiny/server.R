@@ -727,7 +727,7 @@ server <- function(input, output, session) {
     wbquantResult$WBanalysis = mess
     wbquantResult$WBanalysis_filtered = NULL
     showAlert("Success", "The RDS has been uploaded with success", "success", 2000)
-})
+  })
   
   observe({
     if(!is.null(wbquantResult$WBanalysis) & !is.null(wbquantResult$NormWBanalysis))
@@ -1337,31 +1337,87 @@ server <- function(input, output, session) {
       type = "Excel",
       allDouble = T,
       colname = F,
-      colors = F
+      colors = T
     )
     
-    if (setequal(names(mess), c("message", "call"))) {
+    if(setequal(names(mess), c("message", "call"))) {
       showAlert("Error", mess[["message"]], "error", 5000)
-      return(NULL) 
+    } else {
+      elisaResult$Initdata = mess$x
+      FlagsELISA$EXPcol = mess$fill
+      elisaResult$ELISAcell_SN = mess$SNtable
+    
+      removeModal()
+      showAlert("Success", "The Excel has been uploaded  with success", "success", 2000)
     }
-      
-    elisaResult$Initdata = mess
-    showAlert("Success", "The ELISA excel has been uploaded  with success", "success", 2000)
   }
+  
+  
+  observe({
+    if (!is.null(elisaResult$Initdata) && is.null(elisaResult$TablePlot)) {
+      tableExcelColored(session = session,
+                        Result = elisaResult, 
+                        FlagsExp = FlagsELISA,
+                        type = "Initialize")
+    }
+  })
+  
+  observeEvent(elisaResult$TablePlot, {
+    ELISAtb = elisaResult$TablePlot
+    output$ELISAmatrix <- renderDT(
+      ELISAtb,
+      server = FALSE
+    )
+    ##### Plot the values selected!
+    
+    #matTime =  as.matrix(elisaResult$ELISAcell_TIME)
+   
+    matExp =  as.matrix(elisaResult$ELISAcell_SN)
+    
+    if( !all(matExp == "")){
+      mat = as.matrix(elisaResult$Initdata)
+      elisaV = expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
+        rowwise() %>%
+        mutate(values = mat[Var1, Var2])
+      elisaE = expand.grid(seq_len(nrow(matExp)), seq_len(ncol(matExp))) %>%
+        rowwise() %>%
+        mutate(exp = matExp[Var1, Var2])
+      elisaTot = merge(elisaV, elisaE) %>%
+        na.omit() %>%
+        filter(exp != "") 
+      
+      elisaResult$data = elisaTot
+      
+      output$ELISAinitplots <- renderPlot(
+        ggplot(elisaTot, aes(x = time, y=values, col = exp),alpha = 1.4) +
+          #geom_boxplot(aes(fill= exp, group = time),alpha = 0.4) +
+          geom_point(aes(group = exp)) +
+          scale_color_manual(values = FlagsELISA$EXPcol) + 
+          theme_bw()+
+          labs(x = "Times", y = "Values", col = "Exp",fill = "Exp")+
+          theme(legend.position = c(0, 1), 
+                legend.justification = c(0, 1),
+                legend.direction = "vertical",
+                legend.background = element_rect(size=0.5,
+                                                 linetype="solid",
+                                                 colour ="black"))
+      )
+    }
+  })
   
   observe({
     if( !is.null(elisaResult$Initdata) && is.null(elisaResult$TablePlot) ){
       ELISAtb = elisaResult$Initdata
-      
+
       ELISAtb.colors = ELISAtb
       ELISAtb.colors[,] = ""
       mELISA  =cbind(ELISAtb,ELISAtb.colors)
-      
-      cols.keep <- paste0('V',1:length(ELISAtb[1,])) 
+
+      cols.keep <- paste0('V',1:length(ELISAtb[1,]))
       cols.color <- paste0('Col',1:length(ELISAtb[1,]))
-      
+
       colnames(mELISA) = c(cols.keep,cols.color)
-      
+
       ELISAtb = datatable(mELISA,
                           filter = 'none',
                           #server = FALSE,
@@ -1370,16 +1426,16 @@ server <- function(input, output, session) {
                           options = list(
                             #lengthChange = FALSE,
                             #scrollX = TRUE,
-                            columnDefs = list(list(targets = cols.color, 
+                            columnDefs = list(list(targets = cols.color,
                                                    visible = FALSE))
                           )) %>%
         formatStyle(cols.keep,
                     cols.color,
                     backgroundColor = styleEqual("", 'white'))
-      
+
       ELISA = ELISAtb$x$data
-      
-      output$ELISAmatrix <-renderDataTable({ELISAtb} 
+      print(elisaResult$ELISAcell_SN)
+      output$ELISAmatrix <-renderDataTable({ELISAtb}
                                            #options = list(scrollX = TRUE)
       )
       # renderDataTable(
@@ -1391,7 +1447,7 @@ server <- function(input, output, session) {
       #   #options = list(lengthChange = FALSE ),
       #   #rownames= FALSE
       # )
-      
+
       ELISAcell_SN <- ELISAcell_EXP <- matrix(
         "",
         nrow = length(ELISA[,1]),
@@ -1504,7 +1560,7 @@ server <- function(input, output, session) {
         endocResult$ENDOCcell_SN = mess$SNtable
         
         removeModal()
-        showAlert("Success", "The RDs has been uploaded  with success", "success", 2000)
+        showAlert("Success", "The Excel has been uploaded  with success", "success", 2000)
       }
   }
   
@@ -1570,7 +1626,6 @@ server <- function(input, output, session) {
     }
     return(do.call(rbind, formatted_data))
   }
-    
     
   observe({
     color_codes <- FlagsENDOC$EXPcol
