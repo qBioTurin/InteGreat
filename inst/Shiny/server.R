@@ -1370,29 +1370,32 @@ server <- function(input, output, session) {
     )
     ##### Plot the values selected!
     
-    #matTime =  as.matrix(elisaResult$ELISAcell_TIME)
-   
+    matTime =  as.matrix(elisaResult$ELISAcell_EXP)
     matExp =  as.matrix(elisaResult$ELISAcell_SN)
     
-    if( !all(matExp == "")){
+    if( !( all(matTime == "")  || all(matExp == "") ) ){
       mat = as.matrix(elisaResult$Initdata)
       elisaV = expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
         rowwise() %>%
         mutate(values = mat[Var1, Var2])
-      elisaE = expand.grid(seq_len(nrow(matExp)), seq_len(ncol(matExp))) %>%
+      elisaT = expand.grid(seq_len(nrow(matTime)), seq_len(ncol(matTime))) %>%
+        rowwise() %>%
+        mutate(time = matTime[Var1, Var2])
+      endocE = expand.grid(seq_len(nrow(matExp)), seq_len(ncol(matExp))) %>%
         rowwise() %>%
         mutate(exp = matExp[Var1, Var2])
-      elisaTot = merge(elisaV, elisaE) %>%
+      elisaTot = merge(elisaV,merge(elisaT,elisaE)) %>%
         na.omit() %>%
-        filter(exp != "") 
+        filter(time != "",  exp != "") 
       
       elisaResult$data = elisaTot
       
-      output$ELISAinitplots <- renderPlot(
-        ggplot(elisaTot, aes(x = time, y=values, col = exp),alpha = 1.4) +
+      output$ENDOCinitplots <- renderPlot(
+        ggplot(endocTot, aes(x = time, y=values, col = exp),alpha = 1.4) +
           #geom_boxplot(aes(fill= exp, group = time),alpha = 0.4) +
           geom_point(aes(group = exp)) +
-          scale_color_manual(values = FlagsELISA$EXPcol) + 
+          scale_color_manual(values = FlagsENDOC$EXPcol) + 
+          #scale_fill_manual(values = FlagsENDOC$EXPcol) + 
           theme_bw()+
           labs(x = "Times", y = "Values", col = "Exp",fill = "Exp")+
           theme(legend.position = c(0, 1), 
@@ -1736,20 +1739,16 @@ server <- function(input, output, session) {
       matchingIndices <- which(endocResult$ENDOCcell_SN == color_code, arr.ind = TRUE)
       numMatches <- nrow(matchingIndices)
       
-      # Dividi il nuovo valore in base ai trattini
       new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
       
       if (length(new_values) != numMatches || grepl("--", new_value)) {
-        # Gestione errore: numero di valori non corrisponde o formato errato
         session$sendCustomMessage(type = "errorNotification", 
                                   message = "Number of values does not match the number of matches or format error.")
       } else {
-        # Prosegui con l'aggiornamento dei dati se tutto è corretto
         for (i in seq_along(matchingIndices[, "row"])) {
           endocResult$ENDOCcell_TIME[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
         }
         
-        # Aggiorna i dati e la visualizzazione
         tableExcelColored(session = session,
                           Result = endocResult, 
                           FlagsExp = FlagsENDOC,
@@ -1761,6 +1760,7 @@ server <- function(input, output, session) {
     }
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
+  
   observeEvent(input$rightTable_cell_edit, {
     info <- input$rightTable_cell_edit
     req(info)  
@@ -1770,7 +1770,7 @@ server <- function(input, output, session) {
     selected_col <- info$col
     new_value <- info$value
     
-    if (selected_col == 3) { 
+    if (selected_col == 4) { 
       color_code <- data[selected_row, "ColorCode"]
       
       if (!is.na(color_code) && color_code != "" && color_code != "white" && color_code != "#FFFFFF") {
@@ -1803,8 +1803,34 @@ server <- function(input, output, session) {
           output$ENDOCmatrix <-renderDataTable({endocResult$TablePlot})
         } 
       }
+    } else if (selected_col == 5) {
+      color_code <- data[selected_row, "ColorCode"]
+      req(color_code != "", color_code != "white", color_code != "#FFFFFF")
+      
+      matchingIndices <- which(endocResult$ENDOCcell_SN == color_code, arr.ind = TRUE)
+      numMatches <- nrow(matchingIndices)
+      
+      new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
+      
+      if (length(new_values) != numMatches || grepl("--", new_value)) {
+        session$sendCustomMessage(type = "errorNotification", 
+                                  message = "Number of values does not match the number of matches or format error.")
+      } else {
+        for (i in seq_along(matchingIndices[, "row"])) {
+          endocResult$ENDOCcell_TIME[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
+        }
+        
+        tableExcelColored(session = session,
+                          Result = endocResult, 
+                          FlagsExp = FlagsENDOC,
+                          type = "Update")
+        
+        output$ENDOCSelectedValues <- renderText(paste("Updated values for experimental conditions:", paste(new_values, collapse = " - ")))
+        output$ENDOCmatrix <- renderDataTable({endocResult$TablePlot})
+      }
     }
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
   
   observeEvent(input$ENDOCmatrix_cell_clicked, {
     req(input$ENDOCmatrix_cell_clicked)  
