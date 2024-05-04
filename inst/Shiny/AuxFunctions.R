@@ -149,15 +149,17 @@ readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = 
       } 
       
       x = readxl::read_excel(filename, col_names = colname)
+      
       if (allDouble) {
-        xstr = which(sapply(1:dim(x)[2], function(i) !is.double(x[[i]])))
+        # Individuare le colonne che contengono solo dati numerici
+        xstr = which(sapply(x, function(col) !is.numeric(col)))
         if (length(xstr) > 0) {
-          for (i in xstr) {
+          # Converti solo colonne che sono già numeriche
+          for (i in which(sapply(x, is.numeric))) {
             x[[i]] = as.double(x[[i]])
           }
         }
       }
-      
       if (colors) {
         wb = loadWorkbook(filename)
         sheetName = wb$sheet_names[1]

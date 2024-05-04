@@ -2134,6 +2134,7 @@ server <- function(input, output, session) {
                                    })
       do.call(tagList, select_output_list)
     })
+    
     # blanks updating
     output$EndocBlankSelection <- renderUI({
       select_output_list <- lapply(unique(c(expToselect,baselines)), function(i) {
@@ -2199,6 +2200,188 @@ server <- function(input, output, session) {
   })
   
   ### End ENDOC analysis ####
+  
+  #### CITOXICITY analysis ####
+  
+  ### End CITOXICITY analysis ####
+  
+  #### FACS analysis ####
+  facsResult = reactiveValues(
+    Initdata= NULL,
+    data = NULL,
+    dataFinal = NULL,
+    depth = NULL,
+    depthCount = NULL,
+    name = NULL,
+    statistics = NULL,
+    cells = NULL
+  )
+  
+  facsResult0 = reactiveValues(
+    Initdata= NULL,
+    data = NULL,
+    dataFinal = NULL,
+    depth = NULL,
+    depthCount = NULL,
+    name = NULL,
+    statistics = NULL,
+    cells = NULL
+  )
+  
+  FACSresultListen <- reactive({
+    reactiveValuesToList(facsResult)
+  })
+  observeEvent(FACSresultListen(), {
+    DataAnalysisModule$facsResult = reactiveValuesToList(facsResult)
+    DataAnalysisModule$facsResult$Flags = reactiveValuesToList(FlagsFACS)
+  })
+  
+  FlagsFACS <- reactiveValues(
+    actualLevel = NULL,
+    allLevel = NULL
+  )
+  
+  observeEvent(input$LoadFACS_Button,{
+    alert$alertContext <- "FACS-reset"
+    if(!is.null(facsResult$Initdata) ) {
+      shinyalert(
+        title = "Important message",
+        text = "Do you want to update the FACS data already present, by resetting the previous analysis?",
+        type = "warning",
+        showCancelButton = TRUE,
+        confirmButtonText = "Update",
+        cancelButtonText = "Cancel",
+      )
+    } else loadExcelFileFACS()
+  })
+  
+  observeEvent(input$shinyalert, {
+    removeModal()
+    if (input$shinyalert && alert$alertContext == "FACS-reset") {  
+      resetPanel("FACS", flags = FlagsFACS, result = Result)
+      updateSelectizeInput(session, "FACScell", choices = character(0), selected = character(0))
+
+      loadExcelFileFACS()
+    }
+  })
+  
+  loadExcelFileFACS <- function() {
+    alert$alertContext <- ""
+    
+    for(nameList in names(facsResult0)) 
+      facsResult[[nameList]] <- facsResult0[[nameList]]
+    
+    mess = readfile(
+      filename = input$FACSImport$datapath,
+      isFileUploaded = !is.null(input$FACSImport) && file.exists(input$FACSImport$datapath),
+      type = "Excel",
+      allDouble = TRUE,
+      colname = FALSE,
+      colors = FALSE,
+    )
+    
+    if (setequal(names(mess), c("message", "call"))) {
+      showAlert("Error", mess[["message"]], "error", 5000)
+    } else {
+      if (nrow(mess) > 1) {
+        data <- mess[-1, , drop = FALSE]  # Assicurati di mantenere 'data' come dataframe
+        facsResult$depth <- vector("list", nrow(data))
+        facsResult$depthCount <- numeric(nrow(data))
+        facsResult$name <- vector("list", nrow(data))
+        facsResult$statistics <- vector("list", nrow(data))
+        facsResult$cells <- vector("list", nrow(data))
+        
+        # Ciclo for per iterare su ogni elemento della colonna specificata
+        for (i in 1:nrow(data)) {
+          x <- data[i, 1]
+          
+          if (is.na(x)) {
+            facsResult$depth[i] <- NA
+            facsResult$depthCount[i] <- 0
+            facsResult$name[i] <- data[i, 2]
+            facsResult$statistics[i] <- data[i, 3]
+            facsResult$cells[i] <- data[i, 4]
+          } else {
+            x_cleaned <- gsub(" ", "", x)  # Rimuove tutti gli spazi
+            facsResult$depth[i] <- x  # Conserva il valore originale
+            facsResult$depthCount[i] <- str_count(x_cleaned, fixed(">"))
+            facsResult$name[i] <- data[i, 2]
+            facsResult$statistics[i] <- data[i, 3]
+            facsResult$cells[i] <- data[i, 4]
+          }
+        }
+        
+        FlagsFACS$actualLevel <- 0
+        removeModal()
+        showAlert("Success", "The Excel has been uploaded with success", "success", 2000)
+      }
+    }
+  }
+  
+  
+  observeEvent(FlagsFACS$actualLevel, {
+    valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
+    filtered_cells <- list()
+    filtered_names <- list()
+    loadDrop()
+    
+    if (any(valid_indices)) {
+      for (i in which(valid_indices)) {
+        filtered_cells <- c(filtered_cells, facsResult$cells[i])
+        filtered_names <- c(filtered_names, facsResult$name[i])  # Aggiungi anche il nome corrispondente
+      }
+    }
+    
+    # Filtra i nomi al livello desiderato
+    if (FlagsFACS$actualLevel == 0) title <- "start"
+    else title <- sapply(strsplit(as.character(facsResult$name[valid_indices]), "/", fixed = TRUE), function(x) tail(x, 1))
+    
+    data_for_table <- data.frame(
+      Name = unlist(filtered_names),
+      title = unlist(filtered_cells),
+      stringsAsFactors = FALSE
+    )
+    
+    output$FACSmatrix <- renderDT({
+      datatable(data_for_table, options = list(
+        pageLength = 10,
+        autoWidth = TRUE,
+        columnDefs = list(
+          list(width = '20px', targets = 0),
+          list(width = '150px', targets = 1)
+        )      
+      ))
+    })
+  })
+  
+  loadDrop <- function() {
+    targetLevel <- FlagsFACS$actualLevel + 1  # Livello target da filtrare
+    
+    # Filtra i nomi al livello desiderato
+    valid_indices <- facsResult$depthCount == targetLevel
+    valid_names <- facsResult$name[valid_indices]
+    valid_names <- as.character(valid_names)
+    
+    # Assicurati che valid_names sia una stringa
+    if (is.character(valid_names)) {
+      # Estrai la parte desiderata del nome
+      short_names <- sapply(strsplit(valid_names, "/", fixed = TRUE), function(x) tail(x, 1))
+    } else {
+      print("valid_names is not character type")
+      print(valid_names)
+      short_names <- character(0)
+    }
+    
+    # Aggiorna le scelte della dropdown
+    updateSelectInput(session, "FACScell", choices = short_names, selected = NULL)
+
+    output$selectedCell <- renderText({
+      paste("You have selected:", input$FACScell)
+      FlagsFACS$actualLevel <- FlagsFACS$actualLevel + 1
+    })
+  }
+  
+  ### End FACS analysis ####
   
   #start statistics
   DataStatisticModule = reactiveValues(WB = list(),

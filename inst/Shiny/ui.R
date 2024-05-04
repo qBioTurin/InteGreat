@@ -14,6 +14,7 @@ library(shinyWidgets)
 library(DT)
 library(openxlsx)
 library(patchwork)
+library(stringr)
 
 ui <- dashboardPage(
  dashboardHeader(title = "ORCA",
@@ -53,7 +54,10 @@ ui <- dashboardPage(
                                   menuSubItem("Quantification", tabName = "tablesENDOC")),
                          menuItem('Cytotoxicity assay', tabName = 'cytotox',
                                   menuSubItem("Upload data", tabName = "uploadCYTOTOX"),
-                                  menuSubItem("Quantification", tabName = "tablesCYTOTOX"))
+                                  menuSubItem("Quantification", tabName = "tablesCYTOTOX")),
+                         menuItem('Facs analysis', tabName = 'facs',
+                                  menuSubItem("Upload data", tabName = "uploadFACS"),
+                                  menuSubItem("Quantification", tabName = "tablesFACS"))
                 ),
                 
                 menuItem('Statistical analysis', tabName = 'StatAnalysis_tab', icon = icon('magnifying-glass-chart')),
@@ -683,7 +687,6 @@ ui <- dashboardPage(
       tabItem(tabName = "tablesENDOC",
               h2("Quantification"),
               fluidRow(
-                tags$head(tags$script(src = "message-handler.js")),
                 box(width= 12,
                     title = "Select a blank for the following experimental conditions",
                     collapsible = TRUE,
@@ -723,9 +726,95 @@ ui <- dashboardPage(
                 )
               )
       ),
-      
       ## END data analysis: ENDOC
       
+      ## START data analysis: FACS
+      tabItem(
+        tabName = "uploadFACS",
+        h2("Load FACS data"),
+        fluidRow(
+          column(
+            9,
+            fileInput(
+              inputId = "FACSImport",
+              label = "",
+              placeholder = "Select an Excel file.",
+              width = "80%", 
+              multiple = TRUE
+            )
+          ),
+          column(2,
+                 actionButton(
+                   label = "Load",
+                   style = "margin-top: 20px; width: 100%;",
+                   icon = shiny::icon("upload"),
+                   inputId = "LoadFACS_Button"
+                 )
+          ),
+          tags$style(type='text/css', "#loadAnalysis_Button { width:100%; margin-top: 20px;}")
+        ),
+        fluidRow(
+          column(4,
+                 selectizeInput("FACScell",
+                                label = "selectize",
+                                choices = c(),  
+                                options = list(create = TRUE))
+                 )
+        ),
+        fluidRow(
+          tags$head(
+            tags$style(HTML("
+              #FACSmatrix { 
+                float: left;
+              }
+            "))
+          ),
+          column(12, 
+                 dataTableOutput("FACSmatrix")           )
+        )
+      ),
+      tabItem(tabName = "tablesFACS",
+              h2("Quantification"),
+              fluidRow(
+                box(width= 12,
+                    title = "Select a blank for the following experimental conditions",
+                    collapsible = TRUE,
+                    collapsed = FALSE,
+                    h4("If time information is associated with the experimental conditions
+                       defined as blank, then it will be lost during the averaging of its values."),
+                    uiOutput("FacsBlankSelection")
+                ),
+                box(width= 12,
+                    title = "Select a baseline for the following experimental conditions",
+                    collapsible = TRUE,
+                    collapsed = FALSE,
+                    uiOutput("FacsBaselineSelection")
+                ),
+                box(width= 12,
+                    title = "Quantification",
+                    collapsible = TRUE,
+                    collapsed = TRUE,
+                    DTOutput("FACStables"),
+                    plotOutput("FACSplots"),
+                    fluidRow(
+                      column(width = 1,offset = 9,
+                             downloadButton( label = "Download the RDs", 
+                                             outputId = "downloadButton_FACS",
+                                             #href = "Results.RData",
+                                             #download = "Results.RData",
+                                             icon = icon("download") )
+                      ),
+                      column(width = 1,offset = 7,
+                             downloadButton( label = "Download xlsx", 
+                                             outputId = "downloadButtonExcel_FACS",
+                                             #href = "Results.RData",
+                                             #download = "Results.RData",
+                                             icon = icon("download") )
+                      )
+                    )
+                )
+              )
+      ),
       #start statistical analysis
       tabItem(tabName = "StatAnalysis_tab",
               h2("Statistical analysis"),
@@ -768,7 +857,7 @@ ui <- dashboardPage(
                   )
                 )
               )
-      )
+        )
       )
     )
 )
