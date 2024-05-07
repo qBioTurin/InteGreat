@@ -753,24 +753,33 @@ ui <- dashboardPage(
           ),
           tags$style(type='text/css', "#loadAnalysis_Button { width:100%; margin-top: 20px;}")
         ),
-        fluidRow(
-          column(4,
-                 selectizeInput("FACScell",
-                                label = "selectize",
-                                choices = c(),  
-                                options = list(create = TRUE))
-                 )
-        ),
-        fluidRow(
-          tags$head(
-            tags$style(HTML("
-              #FACSmatrix { 
-                float: left;
-              }
-            "))
+        box(width = 12,
+          fluidRow(
+            column(3,
+                   selectizeInput("FACScell",
+                                  label = "selectize",
+                                  choices = c(),  
+                                  options = list(placeholder = 'select the next level', create = TRUE))
+            ),
+            column(width = 7, offset = 1,
+                   tags$div(
+                     textOutput("FacsUpload"),
+                     style = "font-size: 24px; text-align: left; color: red;
+                                             width: 100%; margin-top: 20px;"
+                     )
+                   )
           ),
-          column(12, 
-                 dataTableOutput("FACSmatrix")           )
+          fluidRow(
+            tags$head(
+              tags$style(HTML("
+                #FACSmatrix { 
+                  float: left;
+                }
+              "))
+            ),
+            column(12, 
+                   dataTableOutput("FACSmatrix")           )
+          )
         )
       ),
       tabItem(tabName = "tablesFACS",

@@ -2320,7 +2320,6 @@ server <- function(input, output, session) {
   }
   observeEvent(FlagsFACS$actualLevel, {
     if (FlagsFACS$actualLevel == 0) {
-      # Gestione iniziale dei dati quando actualLevel è 0
       valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
       filtered_cells <- list()
       filtered_names <- list()
@@ -2337,53 +2336,55 @@ server <- function(input, output, session) {
         Start = unlist(filtered_cells),
         stringsAsFactors = FALSE
       )
-      FlagsFACS$data <- data_for_table  # Salva i dati iniziali in FlagsFACS$data
+      FlagsFACS$data <- data_for_table  
       
-      # Resetta il percorso globale all'inizio
       FlagsFACS$actualPath <- ""
       
       output$FACSmatrix <- renderDT({
         datatable(data_for_table, options = list(
           pageLength = 10,
-          autoWidth = TRUE
+          autoWidth = TRUE,
+          columnDefs = list(
+            list(title = "", targets = 2)  
+          )
         ))
       })
+      output$FacsUpload <- renderText("choose a value from the dropdown")
     } else {
-      selected_item <- input$FACScell  # Elemento selezionato dalla dropdown, ad es. "cells"
+      selected_item <- input$FACScell  
       
-      # Crea una nuova colonna per i dati corrispondenti
       new_column_name <- selected_item
-      new_column_data <- numeric(nrow(FlagsFACS$data))  # Inizializza la nuova colonna con valori numerici
+      new_column_data <- numeric(nrow(FlagsFACS$data))  
       
-      # Aggiorna il percorso globale solo una volta per livello
       if (nzchar(FlagsFACS$actualPath)) {
         FlagsFACS$actualPath <- paste0(FlagsFACS$actualPath, "/", selected_item)
       } else {
         FlagsFACS$actualPath <- selected_item
       }
       
-      # Scansiona ogni riga nel data frame esistente per aggiungere dati incrementali
       for (i in seq_len(nrow(FlagsFACS$data))) {
-        new_path <- paste0(FlagsFACS$data$Name[i], "/", FlagsFACS$actualPath)  # Costruisce il nuovo percorso per la ricerca
-        index <- which(facsResult$name == new_path)  # Trova l'indice in facsResult dove il nome corrisponde
+        new_path <- paste0(FlagsFACS$data$Name[i], "/", FlagsFACS$actualPath) 
+        index <- which(facsResult$name == new_path) 
         
-        if (length(index) == 1) {  # Assicura che ci sia una corrispondenza unica
-          new_column_data[i] <- facsResult$cells[index]  # Prendi il valore delle celle corrispondente
+        if (length(index) == 1) {  
+          new_column_data[i] <- facsResult$cells[index]  
         }
       }
       
-      # Aggiungi la nuova colonna al data frame esistente
       FlagsFACS$data[[new_column_name]] <- new_column_data
+      output$FacsUpload <- renderText(paste("Updated values for experimental conditions:", FlagsFACS$actualPath))
       
-      # Aggiorna la datatable
       output$FACSmatrix <- renderDT({
         datatable(FlagsFACS$data, options = list(
-          autoWidth = TRUE
+          autoWidth = TRUE,
+          columnDefs = list(
+            list(title = "", targets = 2)  # Applica la classe 'Start' alla seconda colonna
+          )
         ))
       })
     }
-    loadDrop()  # Ricarica la dropdown per il nuovo livello
-  }, ignoreInit = TRUE)  # Ignora l'inizializzazione per non scatenare eventi all'avvio
+    loadDrop() 
+  }, ignoreInit = TRUE)  
   
   loadDrop <- function() {
     targetLevel <- FlagsFACS$actualLevel + 1  # Livello target da filtrare
@@ -2393,17 +2394,24 @@ server <- function(input, output, session) {
     valid_names <- facsResult$name[valid_indices]
     valid_names <- as.character(valid_names)
     
-    if (is.character(valid_names)) {
+    if (is.character(valid_names) && length(valid_names) > 0) {
       short_names <- sapply(strsplit(valid_names, "/", fixed = TRUE), function(x) tail(x, 1))
     } else {
-      print("valid_names is not character type")
+      print("valid_names is not character type or no valid names found")
       print(valid_names)
       short_names <- character(0)
     }
     
-    # Aggiorna le scelte della dropdown
-    updateSelectInput(session, "FACScell", choices = short_names, selected = character(0))
+    # Controlla se ci sono scelte disponibili
+    if (length(short_names) == 0) {
+      # Se non ci sono scelte, mostra "No choices available" come unica opzione disabilitata
+      updateSelectInput(session, "FACScell", choices = list("No choices available" = ""), selected = "")
+    } else {
+      # Altrimenti, aggiorna le scelte della dropdown normalmente
+      updateSelectInput(session, "FACScell", choices = short_names, selected = character(0))
+    }
   }
+  
   
   observeEvent(input$FACScell, {
     if (!is.null(input$FACScell) && nzchar(input$FACScell)) {
