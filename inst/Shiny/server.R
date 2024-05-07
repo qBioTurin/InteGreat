@@ -2238,7 +2238,8 @@ server <- function(input, output, session) {
   
   FlagsFACS <- reactiveValues(
     actualLevel = NULL,
-    allLevel = NULL
+    allLevel = NULL,
+    actualPath = NULL
   )
   
   observeEvent(input$LoadFACS_Button,{
@@ -2317,28 +2318,29 @@ server <- function(input, output, session) {
       }
     }
   }
-  
   observeEvent(FlagsFACS$actualLevel, {
     if (FlagsFACS$actualLevel == 0) {
-      # Gestisci il caso quando FlagsFACS$actualLevel è 0
+      # Gestione iniziale dei dati quando actualLevel è 0
       valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
       filtered_cells <- list()
       filtered_names <- list()
-      cell_values <- list()  # Preparare la lista anche qui per coerenza
       
       if (any(valid_indices)) {
         for (i in which(valid_indices)) {
           filtered_cells <- c(filtered_cells, facsResult$cells[i])
           filtered_names <- c(filtered_names, facsResult$name[i])
-          cell_values <- c(cell_values, NA)  # NA perché non c'è selezione dalla dropdown
         }
       }
-        data_for_table <- data.frame(
+      
+      data_for_table <- data.frame(
         Name = unlist(filtered_names),
-        Cell = unlist(filtered_cells),
+        Start = unlist(filtered_cells),
         stringsAsFactors = FALSE
       )
-      FlagsFACS$data <- data_for_table
+      FlagsFACS$data <- data_for_table  # Salva i dati iniziali in FlagsFACS$data
+      
+      # Resetta il percorso globale all'inizio
+      FlagsFACS$actualPath <- ""
       
       output$FACSmatrix <- renderDT({
         datatable(data_for_table, options = list(
@@ -2346,57 +2348,42 @@ server <- function(input, output, session) {
           autoWidth = TRUE
         ))
       })
-      
     } else {
-      # Gestisci il caso quando FlagsFACS$actualLevel non è 0
-      valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
-      filtered_cells <- list()
-      filtered_names <- list()
-      cell_values <- list()
-      selected_item <- input$FACScell  # Assumendo che FACScell sia l'ID della dropdown
+      selected_item <- input$FACScell  # Elemento selezionato dalla dropdown, ad es. "cells"
       
-      if (any(valid_indices)) {
-        for (i in which(valid_indices)) {
-          # Estrai l'ultimo segmento dopo l'ultimo "/" nel nome
-          last_part_name <- tail(strsplit(as.character(facsResult$name[i]), "/", fixed = TRUE)[[1]], 1)
-          
-          if (last_part_name == selected_item) {
-            filtered_cells <- c(filtered_cells, facsResult$cells[i])
-            filtered_names <- c(filtered_names, facsResult$name[i])
-            # Popola la colonna Cell con i valori delle celle filtrate
-            cell_values <- c(cell_values, facsResult$cells[i])
-          } else {
-            # Aggiungi NA se non corrisponde
-            cell_values <- c(cell_values, NA)
-          }
+      # Crea una nuova colonna per i dati corrispondenti
+      new_column_name <- selected_item
+      new_column_data <- numeric(nrow(FlagsFACS$data))  # Inizializza la nuova colonna con valori numerici
+      
+      # Aggiorna il percorso globale solo una volta per livello
+      if (nzchar(FlagsFACS$actualPath)) {
+        FlagsFACS$actualPath <- paste0(FlagsFACS$actualPath, "/", selected_item)
+      } else {
+        FlagsFACS$actualPath <- selected_item
+      }
+      
+      # Scansiona ogni riga nel data frame esistente per aggiungere dati incrementali
+      for (i in seq_len(nrow(FlagsFACS$data))) {
+        new_path <- paste0(FlagsFACS$data$Name[i], "/", FlagsFACS$actualPath)  # Costruisce il nuovo percorso per la ricerca
+        index <- which(facsResult$name == new_path)  # Trova l'indice in facsResult dove il nome corrisponde
+        
+        if (length(index) == 1) {  # Assicura che ci sia una corrispondenza unica
+          new_column_data[i] <- facsResult$cells[index]  # Prendi il valore delle celle corrispondente
         }
       }
       
-      new_data <- data.frame(
-        Name = unlist(filtered_names),
-        Cell = unlist(filtered_cells),
-        stringsAsFactors = FALSE
-      )
-      new_data[selected_item] <- unlist(cell_values)  # Crea la nuova colonna con il nome di selected_item
+      # Aggiungi la nuova colonna al data frame esistente
+      FlagsFACS$data[[new_column_name]] <- new_column_data
       
-      print(FlagsFACS$data)
-      # Combinare i dati esistenti con i nuovi dati
-      if (nrow(FlagsFACS$data) > 0) {
-        combined_data <- merge(FlagsFACS$data, new_data, by = c("Name", "Cell"), all = TRUE)
-      } else {
-        combined_data <- new_data
-      }
-      
-      FlagsFACS$data <- combined_data  # Aggiorna i dati globali
-      
+      # Aggiorna la datatable
       output$FACSmatrix <- renderDT({
         datatable(FlagsFACS$data, options = list(
-          autoWidth = FALSE
+          autoWidth = TRUE
         ))
       })
     }
-    loadDrop()
-  })
+    loadDrop()  # Ricarica la dropdown per il nuovo livello
+  }, ignoreInit = TRUE)  # Ignora l'inizializzazione per non scatenare eventi all'avvio
   
   loadDrop <- function() {
     targetLevel <- FlagsFACS$actualLevel + 1  # Livello target da filtrare
