@@ -7,6 +7,6 @@
 
 shinyApp(ui,
          server,
-         options =  options(shiny.maxRequestSize=1000*1024^2,
-                            shiny.launch.browser = .rs.invokeShinyWindowExternal)
+         options =  options(shiny.maxRequestSize=3 * 1024^4,
+                            shiny.launch.browser = .rs.invokeShinyWindowExternal) 
          )

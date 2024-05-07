@@ -10,9 +10,10 @@ library("shinyWidgets")
 library(DT)
 library(openxlsx)
 library(patchwork)
-
-
+library(shinyjs)
+library(shinybusy)
 ui <- dashboardPage(
+  
   #theme = shinytheme("paper"),
   dashboardHeader(title = "ORCA",
                   tags$li(a(onclick = "onclick =window.open('https://github.com/qBioTurin/ORCA')",
@@ -51,19 +52,18 @@ ui <- dashboardPage(
                           ),
                           block = TRUE)
   ),
-  dashboardSidebar(   
+  dashboardSidebar(
     sidebarMenu(id = "SideTabs",
                 menuItem('Home',
                          tabName = 'Home',
                          icon = icon('home')
                 ),
                 menuItem("Data Analysis",
-                         tabName = 'DataAnaslysis',
+                         tabName = 'DataAnalysis',
                          icon = icon('chart-line'),
-                         menuItem('Video processing',
-                                  tabName = 'pcr',
-                                  menuSubItem("Upload data", tabName = "uploadVideo"),
-                                  menuSubItem("Cells identification", tabName = "cellsVisual")
+                         menuItem('Border Identification',
+                                  tabName = 'border',
+                                  menuSubItem("Upload Video", tabName = "uploadVideo")
                          )
                 ),
                 menuItem('Statistical analysis',
@@ -130,7 +130,6 @@ ui <- dashboardPage(
         # h4(em("Check", a("here", href="https://www.google.com/")," for a brief video presentation of the ORCA framework, or ",
         #       a("here", href="https://www.google.com/"),"to download the user guide.")),
       ),
-      
       ###### BEGIN LOAD ANALYSIS ####
       tabItem(tabName = "LoadAnalysis",
               h2("Load analysis"),
@@ -167,21 +166,28 @@ ui <- dashboardPage(
       ## BEGIN data integration: Video  #######
       # First tab content
       tabItem(tabName = "uploadVideo",
+              shinyjs::useShinyjs(),
               h2("Load video"),
               fluidRow(
                 column(10,
-                       fileInput(inputId = "VideoImport",
+                       fileInput(inputId = "uploaded_video",
                                  label = "",
-                                 placeholder = "Select a Tiff file",
+                                 placeholder = "Choose .lif file",accept = ".lif",
                                  width = "80%"),
+                      
                 ),
                 column(1,
                        style = "margin-top: 20px;",
-                       actionButton( label = "Load",
-                                     icon = shiny::icon("upload"),
-                                     inputId = "LoadVideo_Button")
+                       use_busy_spinner(spin = "fading-circle"),
+                       actionButton("uploadVideo_button", "Upload Video", icon = shiny::icon("upload")),
                 )
               ),
+              
+              fluidRow(
+                uiOutput("imageGallery")
+                
+              ),
+              
               fluidRow(
                 column(
                   width = 10,offset = 1,
