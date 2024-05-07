@@ -2318,40 +2318,84 @@ server <- function(input, output, session) {
     }
   }
   
-  
   observeEvent(FlagsFACS$actualLevel, {
-    valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
-    filtered_cells <- list()
-    filtered_names <- list()
-    loadDrop()
-    
-    if (any(valid_indices)) {
-      for (i in which(valid_indices)) {
-        filtered_cells <- c(filtered_cells, facsResult$cells[i])
-        filtered_names <- c(filtered_names, facsResult$name[i])  # Aggiungi anche il nome corrispondente
+    if (FlagsFACS$actualLevel == 0) {
+      # Gestisci il caso quando FlagsFACS$actualLevel è 0
+      valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
+      filtered_cells <- list()
+      filtered_names <- list()
+      cell_values <- list()  # Preparare la lista anche qui per coerenza
+      
+      if (any(valid_indices)) {
+        for (i in which(valid_indices)) {
+          filtered_cells <- c(filtered_cells, facsResult$cells[i])
+          filtered_names <- c(filtered_names, facsResult$name[i])
+          cell_values <- c(cell_values, NA)  # NA perché non c'è selezione dalla dropdown
+        }
       }
+        data_for_table <- data.frame(
+        Name = unlist(filtered_names),
+        Cell = unlist(filtered_cells),
+        stringsAsFactors = FALSE
+      )
+      FlagsFACS$data <- data_for_table
+      
+      output$FACSmatrix <- renderDT({
+        datatable(data_for_table, options = list(
+          pageLength = 10,
+          autoWidth = TRUE
+        ))
+      })
+      
+    } else {
+      # Gestisci il caso quando FlagsFACS$actualLevel non è 0
+      valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
+      filtered_cells <- list()
+      filtered_names <- list()
+      cell_values <- list()
+      selected_item <- input$FACScell  # Assumendo che FACScell sia l'ID della dropdown
+      
+      if (any(valid_indices)) {
+        for (i in which(valid_indices)) {
+          # Estrai l'ultimo segmento dopo l'ultimo "/" nel nome
+          last_part_name <- tail(strsplit(as.character(facsResult$name[i]), "/", fixed = TRUE)[[1]], 1)
+          
+          if (last_part_name == selected_item) {
+            filtered_cells <- c(filtered_cells, facsResult$cells[i])
+            filtered_names <- c(filtered_names, facsResult$name[i])
+            # Popola la colonna Cell con i valori delle celle filtrate
+            cell_values <- c(cell_values, facsResult$cells[i])
+          } else {
+            # Aggiungi NA se non corrisponde
+            cell_values <- c(cell_values, NA)
+          }
+        }
+      }
+      
+      new_data <- data.frame(
+        Name = unlist(filtered_names),
+        Cell = unlist(filtered_cells),
+        stringsAsFactors = FALSE
+      )
+      new_data[selected_item] <- unlist(cell_values)  # Crea la nuova colonna con il nome di selected_item
+      
+      print(FlagsFACS$data)
+      # Combinare i dati esistenti con i nuovi dati
+      if (nrow(FlagsFACS$data) > 0) {
+        combined_data <- merge(FlagsFACS$data, new_data, by = c("Name", "Cell"), all = TRUE)
+      } else {
+        combined_data <- new_data
+      }
+      
+      FlagsFACS$data <- combined_data  # Aggiorna i dati globali
+      
+      output$FACSmatrix <- renderDT({
+        datatable(FlagsFACS$data, options = list(
+          autoWidth = FALSE
+        ))
+      })
     }
-    
-    # Filtra i nomi al livello desiderato
-    if (FlagsFACS$actualLevel == 0) title <- "start"
-    else title <- sapply(strsplit(as.character(facsResult$name[valid_indices]), "/", fixed = TRUE), function(x) tail(x, 1))
-    
-    data_for_table <- data.frame(
-      Name = unlist(filtered_names),
-      title = unlist(filtered_cells),
-      stringsAsFactors = FALSE
-    )
-    
-    output$FACSmatrix <- renderDT({
-      datatable(data_for_table, options = list(
-        pageLength = 10,
-        autoWidth = TRUE,
-        columnDefs = list(
-          list(width = '20px', targets = 0),
-          list(width = '150px', targets = 1)
-        )      
-      ))
-    })
+    loadDrop()
   })
   
   loadDrop <- function() {
@@ -2362,9 +2406,7 @@ server <- function(input, output, session) {
     valid_names <- facsResult$name[valid_indices]
     valid_names <- as.character(valid_names)
     
-    # Assicurati che valid_names sia una stringa
     if (is.character(valid_names)) {
-      # Estrai la parte desiderata del nome
       short_names <- sapply(strsplit(valid_names, "/", fixed = TRUE), function(x) tail(x, 1))
     } else {
       print("valid_names is not character type")
@@ -2373,14 +2415,15 @@ server <- function(input, output, session) {
     }
     
     # Aggiorna le scelte della dropdown
-    updateSelectInput(session, "FACScell", choices = short_names, selected = NULL)
-
-    output$selectedCell <- renderText({
-      paste("You have selected:", input$FACScell)
-      FlagsFACS$actualLevel <- FlagsFACS$actualLevel + 1
-    })
+    updateSelectInput(session, "FACScell", choices = short_names, selected = character(0))
   }
   
+  observeEvent(input$FACScell, {
+    if (!is.null(input$FACScell) && nzchar(input$FACScell)) {
+      FlagsFACS$actualLevel <- FlagsFACS$actualLevel + 1  
+      print(paste("You have selected:", input$FACScell, "- Level is now:", FlagsFACS$actualLevel))
+    }
+  })
   ### End FACS analysis ####
   
   #start statistics
