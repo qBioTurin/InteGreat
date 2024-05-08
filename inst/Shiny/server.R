@@ -2386,28 +2386,45 @@ server <- function(input, output, session) {
     loadDrop() 
   }, ignoreInit = TRUE)  
   
+  # Funzione di aiuto per escapare i caratteri speciali di regex
+  escapeRegex <- function(string) {
+    gsub("([\\\\^$.*+?()[{\\]|-])", "\\\\\\1", string)
+  }
+  
   loadDrop <- function() {
-    targetLevel <- FlagsFACS$actualLevel + 1  # Livello target da filtrare
+    targetLevel <- FlagsFACS$actualLevel + 1
+    currentPath <- FlagsFACS$actualPath
     
-    # Filtra i nomi al livello desiderato
-    valid_indices <- facsResult$depthCount == targetLevel
+    cat("Actual Level:", FlagsFACS$actualLevel, "\n")
+    cat("Target Level:", targetLevel, "\n")
+    cat("Current Path:", currentPath, "\n")
+    
+    # Escapare i caratteri speciali nel currentPath
+    escapedPath <- escapeRegex(currentPath)
+    regex_path <- paste0(".*", escapedPath, "/[^/]+$")
+    valid_indices <- facsResult$depthCount == targetLevel & grepl(regex_path, facsResult$name)
+    
+    cat("Regex for path matching:", regex_path, "\n")
+    
     valid_names <- facsResult$name[valid_indices]
     valid_names <- as.character(valid_names)
+    cat("Valid names found:", length(valid_names), "\n")
     
-    if (is.character(valid_names) && length(valid_names) > 0) {
+    if (length(valid_names) > 0) {
+      print(valid_names)
+      # Estrai solo la parte di percorso immediatamente successiva a quella corrente
       short_names <- sapply(strsplit(valid_names, "/", fixed = TRUE), function(x) tail(x, 1))
     } else {
-      print("valid_names is not character type or no valid names found")
-      print(valid_names)
+      cat("No valid names found at the targeted level\n")
       short_names <- character(0)
     }
     
-    # Controlla se ci sono scelte disponibili
+    print(short_names)
+    
+    # Aggiorna le scelte della dropdown
     if (length(short_names) == 0) {
-      # Se non ci sono scelte, mostra "No choices available" come unica opzione disabilitata
       updateSelectInput(session, "FACScell", choices = list("No choices available" = ""), selected = "")
     } else {
-      # Altrimenti, aggiorna le scelte della dropdown normalmente
       updateSelectInput(session, "FACScell", choices = short_names, selected = character(0))
     }
   }
