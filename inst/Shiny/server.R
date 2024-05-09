@@ -1432,24 +1432,15 @@ server <- function(input, output, session) {
                             columnDefs = list(list(targets = cols.color,
                                                    visible = FALSE))
                           )) %>%
-        formatStyle(cols.keep,
-                    cols.color,
-                    backgroundColor = styleEqual("", 'white'))
+      formatStyle(cols.keep,
+                  cols.color,
+                  backgroundColor = styleEqual("", 'white'))
 
       ELISA = ELISAtb$x$data
       print(elisaResult$ELISAcell_SN)
       output$ELISAmatrix <-renderDataTable({ELISAtb}
-                                           #options = list(scrollX = TRUE)
+                                           
       )
-      # renderDataTable(
-      #   ELISAtb,
-      #   #filter = 'none',
-      #   server = FALSE,
-      #   options=list(scrollX=T)
-      #   #selection = list(mode = 'single', target = 'cell'),
-      #   #options = list(lengthChange = FALSE ),
-      #   #rownames= FALSE
-      # )
 
       ELISAcell_SN <- ELISAcell_EXP <- matrix(
         "",
@@ -1885,8 +1876,7 @@ server <- function(input, output, session) {
   }, ignoreInit = TRUE)
   
   observeEvent(input$ENDOCcell_TIME, {
-    
-    if (!is.null(FlagsENDOC$cellCoo)) {
+    if (!is.null(endocResult$ENDOCcell_TIME) && !is.null(FlagsENDOC$cellCoo) && !anyNA(FlagsENDOC$cellCoo)) {
       ENDOCtb = endocResult$TablePlot
       cellCoo = FlagsENDOC$cellCoo
       
@@ -1907,8 +1897,8 @@ server <- function(input, output, session) {
         output$ENDOCSelectedValues <- renderText(paste("Updated value", paste(currentValues), ": time ", value.now))
         output$ENDOCmatrix <- renderDataTable({endocResult$TablePlot})
       }
-    }
-  })
+    } else return()
+  }, ignoreInit = TRUE)
   
   ## update Baselines checkBox
   observeEvent(c(FlagsENDOC$AllExp,FlagsENDOC$BLANCHEselected),{
@@ -2198,6 +2188,34 @@ server <- function(input, output, session) {
       )
     }
   })
+
+  output$downloadENDOCAnalysis <- downloadHandler(
+    filename = function() {
+      paste('ENDOCanalysis-', Sys.Date(), '.zip', sep='')
+    },
+    content = function(file) {
+      manageSpinner(TRUE)
+      
+      tempDir <- tempdir()
+      nomeRDS <- paste0("ENDOC_analysis-", Sys.Date(), ".rds")
+      nomeXLSX <- paste0("ENDOC_analysis-", Sys.Date(), ".xlsx")
+      
+      tempRdsPath <- file.path(tempDir, nomeRDS)
+      tempXlsxPath <- file.path(tempDir, nomeXLSX)
+      
+      results <- endocResult  # Assicurati di accedere a endocResult in un contesto reattivo, se necessario
+      saveRDS(results, file = tempRdsPath)
+      
+      print("Inizio esportazione in Excel")
+      saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "ENDOC")
+      
+      zip(file, files = c(tempRdsPath, tempXlsxPath), flags = "-j")
+      manageSpinner(FALSE)
+      
+      print(endocResult$TablePlot)
+    } 
+  )
+  
   
   ### End ENDOC analysis ####
   

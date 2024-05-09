@@ -708,20 +708,11 @@ ui <- dashboardPage(
                     DTOutput("ENDOCtables"),
                     plotOutput("ENDOCplots"),
                     fluidRow(
-                      column(width = 1,offset = 9,
-                             downloadButton( label = "Download the RDs", 
-                                             outputId = "downloadButton_ENDOC",
-                                             #href = "Results.RData",
-                                             #download = "Results.RData",
-                                             icon = icon("download") )
+                      column(width = 4, offset = 8,
+                             downloadButton(label = "Download Analysis & Excel", 
+                                            outputId = "downloadENDOCAnalysis",
+                                            icon = icon("download"))
                       ),
-                      column(width = 1,offset = 7,
-                             downloadButton( label = "Download xlsx", 
-                                             outputId = "downloadButtonExcel_ENDOC",
-                                             #href = "Results.RData",
-                                             #download = "Results.RData",
-                                             icon = icon("download") )
-                      )
                     )
                 )
               )

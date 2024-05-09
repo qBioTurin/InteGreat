@@ -358,15 +358,34 @@ saveExcel <- function(filename, ResultList, analysis, PanelStructures = NULL) {
       addWorksheet(wb,"Norm PRC")
       writeDataTable(wb,ResultList[["NewPCR"]], sheet="Norm PRC")
       
-      print(ResultList[["plotPRC"]])
       insertPlot(wb = wb,  sheet="Norm PRC",
                  startCol=dim(ResultList[["NewPCR"]])[2]+ 2)
       
+    },
+    "ENDOC" = {
+      wb <- createWorkbook("ENDOC")  
+      
+      if (!is.null(ResultList$Initdata) && is.data.frame(ResultList$Initdata)) {
+        addWorksheet(wb, "TablePlot")  # Aggiunge un nuovo foglio al workbook
+        writeDataTable(wb, ResultList$Initdata, sheet = "TablePlot")  # Scrive i dati nel foglio
+        print("Initdata scritto nel foglio Excel")
+      } else {
+        print("Errore: Initdata non disponibile o non è un data.frame")
+      }
+      
+      # Se esiste anche dataFinal e vuoi scriverlo su un altro foglio
+      if (!is.null(ResultList$dataFinal) && is.data.frame(ResultList$dataFinal)) {
+        addWorksheet(wb, "Results Analysis")  # Aggiunge un foglio per l'analisi finale
+        writeDataTable(wb, ResultList$dataFinal, sheet = "Results Analysis")  # Scrive i dati di analisi finale
+        print("dataFinal scritto nel foglio Excel")
+      } else {
+        print("dataFinal non disponibile o non è un data.frame")
+      }
     }
   )
   
-  saveWorkbook(wb, filename)
-  return(1)
+  saveWorkbook(wb, filename)  # Salva il workbook
+  return(1)  # Restituisce 1 per indicare il successo
 }
 
 tableExcelColored = function(session, output,Result, FlagsExp, type){
