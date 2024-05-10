@@ -61,7 +61,7 @@ resetPanel <- function(type, flags = NULL, panelStructures = NULL, numberOfPlane
            result$ENDOCcell_SN <- NULL
            result$MapBaseline <- NULL
            result$MapBlank <- NULL
-           
+
            flags$cellCoo <- NULL
            flags$AllExp <- NULL
            flags$BASEselected <- NULL
@@ -70,16 +70,46 @@ resetPanel <- function(type, flags = NULL, panelStructures = NULL, numberOfPlane
            flags$EXPcol <- NULL
         },
         "ELISA" = {
+          FlagsELISA <- reactiveValues(cellCoo = NULL,
+                                       AllExp = "",
+                                       BASEselected = "",
+                                       STDCselected = "",
+                                       BLANCHEselected = "",
+                                       EXPselected = "",
+                                       EXPcol = NULL)
+          
+           result$Initdata <- NULL
+           result$data <- NULL
+           result$TablePlot <- NULL
+           result$dataFinal <- NULL
+           result$ELISAcell_EXP <- NULL
+           result$ELISAcell_SN <- NULL
+           result$MapBaseline <- NULL
+           result$MapBlank <- NULL
+           result$Tablestandcurve <- NULL
+           result$Regression <- NULL
+           
+           flags$cellCoo <- NULL
+           flags$AllExp <- NULL
+           flags$BASESelected <- ""
+           flags$STDCselected <- ""
+           flags$BLANCHEselected
+           flags$EXPselected <- ""
+           flags$EXPcol <- NULL
+        },
+        "FACS" = {
           result$Initdata <- NULL
           result$data <- NULL
-          result$TablePlot <- NULL
           result$dataFinal <- NULL
-          result$ELISAcell_EXP <- NULL
-          result$ELISAcell_SN <- NULL
-          result$MapBaseline <- NULL
-          result$MapBlank <- NULL
-          result$Tablestandcurve <- NULL
-          result$Regression <- NULL
+          result$depth <- NULL
+          result$depthCount <- NULL
+          result$name <- NULL
+          result$statistics <- NULL
+          result$cells <- NULL
+          
+          flags$actualLevel <- NULL
+          flags$allLevel <- NULL
+          flags$actualPath <- NULL
         },
          error = function(cond) {
            showAlert("Error", "an error occured", "error", 5000)

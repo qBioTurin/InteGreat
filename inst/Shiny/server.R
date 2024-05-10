@@ -255,7 +255,6 @@ server <- function(input, output, session) {
       Planes = PanelStructures$data
       Planes[,-1] = round(Planes[,-1])
       wbResult$Planes = Planes
-      print(Planes)
       Flags$LanesCut= T
     }else{
       Flags$LanesCut= F
@@ -768,7 +767,6 @@ server <- function(input, output, session) {
     )
   })
   
-  # selecting rows
   observeEvent(input$AUC_WB_rows_selected,{
     if(!is.null(wbquantResult$WBanalysis) ){
       indexesWB = input$AUC_WB_rows_selected
@@ -802,7 +800,6 @@ server <- function(input, output, session) {
     }
   })
   
-  # the relative density and adjusted is calculated
   observeEvent(list(FlagsWBquant$BothUploaded, input$IdLaneNorm_RelDens,input$AUC_WB_rows_selected,input$AUC_WBnorm_rows_selected),{
     table =  wbResult0$AUCdf 
     
@@ -824,7 +821,7 @@ server <- function(input, output, session) {
         if(!all(table(tbWB$SampleName)==1) ){
           output$LoadingErrorWB <- renderText({"No rows with equal sample name are allowed"})
         }
-        else{ # we admit only one SampleName
+        else{ 
           table = tbWB
           table$AUC_Norm = tbWBnorm$AUC_Norm
           table$RelDens = table$AUC/table$AUC_Norm
@@ -1368,8 +1365,7 @@ server <- function(input, output, session) {
       ELISAtb,
       server = FALSE
     )
-    ##### Plot the values selected!
-    
+
     matTime =  as.matrix(elisaResult$ELISAcell_EXP)
     matExp =  as.matrix(elisaResult$ELISAcell_SN)
     
@@ -1437,9 +1433,7 @@ server <- function(input, output, session) {
                   backgroundColor = styleEqual("", 'white'))
 
       ELISA = ELISAtb$x$data
-      print(elisaResult$ELISAcell_SN)
       output$ELISAmatrix <-renderDataTable({ELISAtb}
-                                           
       )
 
       ELISAcell_SN <- ELISAcell_EXP <- matrix(
@@ -1586,7 +1580,12 @@ server <- function(input, output, session) {
         
         time_values <- apply(matching_indices, 1, function(idx) {
           val <- endocResult$ENDOCcell_TIME[idx["row"], idx["col"]]
-          if (is.na(val) || val == "") "" else val
+          # Controlla esplicitamente per NA e stringhe vuote
+          if (!is.na(val) && val != "") {
+            return(val)
+          } else {
+            return("")
+          }
         })
         
         time_output <- paste(unlist(time_values), collapse = " - ")
@@ -1594,7 +1593,6 @@ server <- function(input, output, session) {
         exp_values <- apply(matching_indices, 1, function(idx) {
           endocResult$ENDOCcell_EXP[idx["row"], idx["col"]]
         })
-        
         if (length(unique(exp_values)) == 1) {
           exp_condition <- ifelse(exp_values[1] == "" || is.na(exp_values[1]), "-", exp_values[1])
         } else {
@@ -1633,9 +1631,12 @@ server <- function(input, output, session) {
     left_colors <- color_codes[1:mid_point]
     right_colors <- color_codes[(mid_point+1):length(color_codes)]
     
-    left_data(get_formatted_data(left_colors, color_names[1:mid_point]))
-    right_data(get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)]))
-      
+    left_formatted_data <- get_formatted_data(left_colors, color_names[1:mid_point])
+    right_formatted_data <- get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)])
+  
+    left_data(left_formatted_data)
+    right_data(right_formatted_data)
+    
     output$leftTable <- renderDataTable(
       left_data(), 
       escape = FALSE, 
@@ -1887,7 +1888,6 @@ server <- function(input, output, session) {
         currentValues <- endocResult$Initdata[cellCoo[1], cellCoo[2]]
         
         endocResult$ENDOCcell_TIME[cellCoo[1], cellCoo[2]] = value.now
-        print(FlagsENDOC$cellCoo)
         tableExcelColored(session = session,
                           Result = endocResult, 
                           FlagsExp = FlagsENDOC,
@@ -2206,16 +2206,13 @@ server <- function(input, output, session) {
       results <- endocResult  # Assicurati di accedere a endocResult in un contesto reattivo, se necessario
       saveRDS(results, file = tempRdsPath)
       
-      print("Inizio esportazione in Excel")
       saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "ENDOC")
       
       zip(file, files = c(tempRdsPath, tempXlsxPath), flags = "-j")
       manageSpinner(FALSE)
       
-      print(endocResult$TablePlot)
-    } 
+      } 
   )
-  
   
   ### End ENDOC analysis ####
   
@@ -2262,7 +2259,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$LoadFACS_Button,{
     alert$alertContext <- "FACS-reset"
-    if(!is.null(facsResult$Initdata) ) {
+    if(!is.null(facsResult$name) ) {
       shinyalert(
         title = "Important message",
         text = "Do you want to update the FACS data already present, by resetting the previous analysis?",
@@ -2277,7 +2274,7 @@ server <- function(input, output, session) {
   observeEvent(input$shinyalert, {
     removeModal()
     if (input$shinyalert && alert$alertContext == "FACS-reset") {  
-      resetPanel("FACS", flags = FlagsFACS, result = Result)
+      resetPanel("FACS", flags = FlagsFACS, result = facsResult)
       updateSelectizeInput(session, "FACScell", choices = character(0), selected = character(0))
 
       loadExcelFileFACS()
@@ -2417,7 +2414,6 @@ server <- function(input, output, session) {
     cat("Target Level:", targetLevel, "\n")
     cat("Current Path:", currentPath, "\n")
     
-    # Escapare i caratteri speciali nel currentPath
     escapedPath <- escapeRegex(currentPath)
     regex_path <- paste0(".*", escapedPath, "/[^/]+$")
     valid_indices <- facsResult$depthCount == targetLevel & grepl(regex_path, facsResult$name)
@@ -2429,17 +2425,12 @@ server <- function(input, output, session) {
     cat("Valid names found:", length(valid_names), "\n")
     
     if (length(valid_names) > 0) {
-      print(valid_names)
-      # Estrai solo la parte di percorso immediatamente successiva a quella corrente
       short_names <- sapply(strsplit(valid_names, "/", fixed = TRUE), function(x) tail(x, 1))
     } else {
       cat("No valid names found at the targeted level\n")
       short_names <- character(0)
     }
     
-    print(short_names)
-    
-    # Aggiorna le scelte della dropdown
     if (length(short_names) == 0) {
       updateSelectInput(session, "FACScell", choices = list("No choices available" = ""), selected = "")
     } else {
@@ -2451,7 +2442,6 @@ server <- function(input, output, session) {
   observeEvent(input$FACScell, {
     if (!is.null(input$FACScell) && nzchar(input$FACScell)) {
       FlagsFACS$actualLevel <- FlagsFACS$actualLevel + 1  
-      print(paste("You have selected:", input$FACScell, "- Level is now:", FlagsFACS$actualLevel))
     }
   })
   ### End FACS analysis ####
@@ -2577,18 +2567,6 @@ server <- function(input, output, session) {
   
   #----------------------------------------------------------------------------------
   # OTHER ANALYSIS TO DO
-  elisaResult  = reactiveValues(
-    Initdata= NULL,
-    data = NULL,
-    TablePlot = NULL,
-    dataFinal = NULL,
-    ELISAcell_EXP = NULL,
-    ELISAcell_SN = NULL,
-    MapBaseline = NULL,
-    MapBlank = NULL,
-    Tablestandcurve = NULL,
-    Regression = NULL)
-  
   cytotoxResult  = reactiveValues(
     Initdata= NULL,
     data = NULL,
