@@ -746,16 +746,20 @@ ui <- dashboardPage(
         ),
         box(width = 12,
           fluidRow(
-            column(3,
-                   selectizeInput("FACScell",
-                                  label = "selectize",
-                                  choices = c(),  
-                                  options = list(placeholder = 'select the next level', create = TRUE))
+            tags$head(
+              tags$style(HTML("
+                #dynamicSelectize { 
+                  margin-right: 40px;
+                }
+              "))
             ),
-            column(width = 7, offset = 1,
+            uiOutput("dynamicSelectize")
+          ),
+          fluidRow(
+            column(width = 10, offset = 1,
                    tags$div(
                      textOutput("FacsUpload"),
-                     style = "font-size: 24px; text-align: left; color: red;
+                     style = "font-size: 24px; text-align: center; color: red;
                                              width: 100%; margin-top: 20px;"
                      )
                    )
@@ -769,49 +773,38 @@ ui <- dashboardPage(
               "))
             ),
             column(12, 
-                   dataTableOutput("FACSmatrix")           )
+                   dataTableOutput("FACSmatrix")          
+                   )
+          ),
+          fluidRow(
+            column(2, offset = 9,
+            actionButton(inputId = "SaveFACSanalysis",
+                         label = 'Save',
+                         style = "width: 100%",
+                         align = "right",
+                         icon = shiny::icon("forward"))
+            )
           )
         )
       ),
       tabItem(tabName = "tablesFACS",
               h2("Quantification"),
+              box(width = 12,
+                fluidRow(
+                  style="width: 95%; margin-left: 30px;", 
+                  dataTableOutput("FACSresult")           
+                ),
+                fluidRow(
+                  style="width: 95%; margin-left: 30px;", 
+                  dataTableOutput("FACSresult_value")           
+                )
+              ),
               fluidRow(
-                box(width= 12,
-                    title = "Select a blank for the following experimental conditions",
-                    collapsible = TRUE,
-                    collapsed = FALSE,
-                    h4("If time information is associated with the experimental conditions
-                       defined as blank, then it will be lost during the averaging of its values."),
-                    uiOutput("FacsBlankSelection")
-                ),
-                box(width= 12,
-                    title = "Select a baseline for the following experimental conditions",
-                    collapsible = TRUE,
-                    collapsed = FALSE,
-                    uiOutput("FacsBaselineSelection")
-                ),
-                box(width= 12,
-                    title = "Quantification",
-                    collapsible = TRUE,
-                    collapsed = TRUE,
-                    DTOutput("FACStables"),
-                    plotOutput("FACSplots"),
-                    fluidRow(
-                      column(width = 1,offset = 9,
-                             downloadButton( label = "Download the RDs", 
-                                             outputId = "downloadButton_FACS",
-                                             #href = "Results.RData",
-                                             #download = "Results.RData",
-                                             icon = icon("download") )
-                      ),
-                      column(width = 1,offset = 7,
-                             downloadButton( label = "Download xlsx", 
-                                             outputId = "downloadButtonExcel_FACS",
-                                             #href = "Results.RData",
-                                             #download = "Results.RData",
-                                             icon = icon("download") )
-                      )
-                    )
+                column(width = 2,offset = 9,
+                       downloadButton( label = "Download Analysis & Excel", 
+                                       outputId = "downloadButtoFACSanalysis",
+                                       icon = icon("download") 
+                                      )
                 )
               )
       ),

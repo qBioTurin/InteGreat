@@ -179,12 +179,9 @@ readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = 
       } 
       
       x = readxl::read_excel(filename, col_names = colname)
-      
       if (allDouble) {
-        # Individuare le colonne che contengono solo dati numerici
         xstr = which(sapply(x, function(col) !is.numeric(col)))
         if (length(xstr) > 0) {
-          # Converti solo colonne che sono già numeriche
           for (i in which(sapply(x, is.numeric))) {
             x[[i]] = as.double(x[[i]])
           }

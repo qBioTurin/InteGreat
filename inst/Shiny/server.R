@@ -993,7 +993,7 @@ server <- function(input, output, session) {
     removeModal()
     if (input$shinyalert && alert$alertContext == "PCR-reset") {  
       resetPanel("PCR", flags = FlagsPCR, result = pcrResult)
-      loadExcelFile()
+      loadExcelFilePCR()
     }
   })
   
@@ -1004,35 +1004,34 @@ server <- function(input, output, session) {
       filename = input$PCRImport$datapath,
       type = "Excel", 
       isFileUploaded = !is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
-      colname = FALSE, 
-      namesAll = namesAll, 
-      allDouble = TRUE, 
-      colors = TRUE 
     )
+    
     
     if (!is.null(mess$message) && mess$call == "") {
       showAlert("Error", mess$message, "error", 5000)
-    } else {
-      validate(
-        need(!is.null(input$PCRImport) && file.exists(input$PCRImport$datapath),
-             "Please select an RT-qPCR excel file!!")
-      )
-      pcrResult$Initdata = mess
-      
-      updateSelectInput(session, "PCR_gene",
-                        choices = c("", colnames(pcrResult$Initdata)),
-                        selected = "")
-      updateSelectInput(session, "PCR_sample",
-                        choices = c("", colnames(pcrResult$Initdata)),
-                        selected = "")
-      updateSelectInput(session, "PCR_value",
-                        choices = c("", colnames(pcrResult$Initdata)),
-                        selected = "")
-      updateSelectInput(session, "PCR_time",
-                        choices = c("", colnames(pcrResult$Initdata)),
-                        selected = "")
-      showAlert("Success", "The RT-qPCR excel has been uploaded with success", "success", 2000)
+      return()
     }
+    
+    pcrResult$Initdata = mess
+    
+    updateSelectInput(session,
+                      "PCR_gene",
+                      choices = c("", colnames(pcrResult$Initdata)),
+                      selected = "")
+    updateSelectInput(session,
+                      "PCR_sample",
+                      choices = c("", colnames(pcrResult$Initdata)),
+                      selected = "")
+    updateSelectInput(session,
+                      "PCR_value",
+                      choices = c("", colnames(pcrResult$Initdata)),
+                      selected = "")
+    updateSelectInput(session,
+                      "PCR_time",
+                      choices = c("", colnames(pcrResult$Initdata)),
+                      selected = "")
+    showAlert("Success", "The RT-qPCR excel has been uploaded with success", "success", 2000)
+    
   }
   
   observeEvent(list(input$PCR_value,input$PCR_gene,input$PCR_sample,input$PCR_time),{
@@ -2276,7 +2275,7 @@ server <- function(input, output, session) {
     if (input$shinyalert && alert$alertContext == "FACS-reset") {  
       resetPanel("FACS", flags = FlagsFACS, result = facsResult)
       updateSelectizeInput(session, "FACScell", choices = character(0), selected = character(0))
-
+      
       loadExcelFileFACS()
     }
   })
@@ -2300,14 +2299,13 @@ server <- function(input, output, session) {
       showAlert("Error", mess[["message"]], "error", 5000)
     } else {
       if (nrow(mess) > 1) {
-        data <- mess[-1, , drop = FALSE]  # Assicurati di mantenere 'data' come dataframe
+        data <- mess[-1, , drop = FALSE]  
         facsResult$depth <- vector("list", nrow(data))
         facsResult$depthCount <- numeric(nrow(data))
         facsResult$name <- vector("list", nrow(data))
         facsResult$statistics <- vector("list", nrow(data))
         facsResult$cells <- vector("list", nrow(data))
         
-        # Ciclo for per iterare su ogni elemento della colonna specificata
         for (i in 1:nrow(data)) {
           x <- data[i, 1]
           
@@ -2318,8 +2316,8 @@ server <- function(input, output, session) {
             facsResult$statistics[i] <- data[i, 3]
             facsResult$cells[i] <- data[i, 4]
           } else {
-            x_cleaned <- gsub(" ", "", x)  # Rimuove tutti gli spazi
-            facsResult$depth[i] <- x  # Conserva il valore originale
+            x_cleaned <- gsub(" ", "", x)  
+            facsResult$depth[i] <- x 
             facsResult$depthCount[i] <- str_count(x_cleaned, fixed(">"))
             facsResult$name[i] <- data[i, 2]
             facsResult$statistics[i] <- data[i, 3]
@@ -2327,81 +2325,119 @@ server <- function(input, output, session) {
           }
         }
         
-        FlagsFACS$actualLevel <- 0
+        print(facsResult$statistics)
         removeModal()
+        
+        maxDepth <- max(facsResult$depthCount, na.rm = TRUE)
+        updateSelectizeUI(maxDepth)
+        FlagsFACS$actualLevel <- 0
+        
         showAlert("Success", "The Excel has been uploaded with success", "success", 2000)
       }
     }
   }
-  observeEvent(FlagsFACS$actualLevel, {
-    if (FlagsFACS$actualLevel == 0) {
-      valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
-      filtered_cells <- list()
-      filtered_names <- list()
-      
-      if (any(valid_indices)) {
-        for (i in which(valid_indices)) {
-          filtered_cells <- c(filtered_cells, facsResult$cells[i])
-          filtered_names <- c(filtered_names, facsResult$name[i])
-        }
-      }
-      
-      data_for_table <- data.frame(
-        Name = unlist(filtered_names),
-        Start = unlist(filtered_cells),
-        stringsAsFactors = FALSE
+  
+  updateSelectizeUI <- function(maxDepth) {
+    output$dynamicSelectize <- renderUI({
+      rowContent <- fluidRow(
+        lapply(1:maxDepth, function(i) {
+          column(
+            2, offset = 1,
+            tags$div(style = "display: none;", id = paste("div_FACScell", i, sep = ""),
+                     selectizeInput(
+                       inputId = paste("FACScell", i, sep = "_"),
+                       label = paste("Level", i),
+                       choices = c(),
+                       options = list(placeholder = 'Select the next level', create = TRUE)
+                     )
+            )
+          )
+        })
       )
-      FlagsFACS$data <- data_for_table  
+      rowContent
+    })
+  }
+  
+  observeEvent(FlagsFACS$actualLevel, {
+  currentInputId <- paste("FACScell", FlagsFACS$actualLevel, sep = "_")
+  
+  if (FlagsFACS$actualLevel == 0) {
+    valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
+    filtered_cells <- list()
+    filtered_names <- list()
+    
+    if (any(valid_indices)) {
+      for (i in which(valid_indices)) {
+        filtered_cells <- c(filtered_cells, facsResult$cells[i])
+        filtered_names <- c(filtered_names, facsResult$name[i])
+      }
+    }
+    
+    data_for_table <- data.frame(
+      Name = unlist(filtered_names),
+      Start = unlist(filtered_cells),
+      stringsAsFactors = FALSE
+    )
+    FlagsFACS$data <- data_for_table  
+    
+    FlagsFACS$actualPath <- ""
+    
+    output$FACSmatrix <- renderDT({
+      datatable(data_for_table, options = list(
+        pageLength = 10,
+        autoWidth = TRUE,
+        columnDefs = list(
+          list(title = "", targets = 2)  
+        )
+      ))
+    })
+    output$FacsUpload <- renderText("choose a value from the dropdown")
+  } else {
+    selected_item <- input[[currentInputId]]
+    path_components <- strsplit(FlagsFACS$actualPath, "/")[[1]]
+    if (length(path_components) >= FlagsFACS$actualLevel) {
+      path_components <- path_components[1:(FlagsFACS$actualLevel - 1)]
+    }
+    path_components <- c(path_components, selected_item)
+    FlagsFACS$actualPath <- paste(path_components, collapse = "/")
+    
+    if (ncol(FlagsFACS$data) > length(path_components) + 1) {  
+      FlagsFACS$data <- FlagsFACS$data[, c(1, (2:length(path_components) + 1)), drop = FALSE]
+    }
+    
+    new_column_name <- tail(path_components, n = 1)  
+    new_column_data <- vector("numeric", length = nrow(FlagsFACS$data))
+    
+    for (i in seq_len(nrow(FlagsFACS$data))) {
+      new_path <- paste0(FlagsFACS$data$Name[i], "/", FlagsFACS$actualPath)
+      index <- which(facsResult$name == new_path)
       
-      FlagsFACS$actualPath <- ""
-      
-      output$FACSmatrix <- renderDT({
-        datatable(data_for_table, options = list(
-          pageLength = 10,
-          autoWidth = TRUE,
-          columnDefs = list(
-            list(title = "", targets = 2)  
-          )
-        ))
-      })
-      output$FacsUpload <- renderText("choose a value from the dropdown")
-    } else {
-      selected_item <- input$FACScell  
-      
-      new_column_name <- selected_item
-      new_column_data <- numeric(nrow(FlagsFACS$data))  
-      
-      if (nzchar(FlagsFACS$actualPath)) {
-        FlagsFACS$actualPath <- paste0(FlagsFACS$actualPath, "/", selected_item)
+      if (length(index) == 1) {
+        new_column_data[i] <- sprintf("%.2f%%", facsResult$statistics[index])
       } else {
-        FlagsFACS$actualPath <- selected_item
+        new_column_data[i] <- NA
       }
-      
-      for (i in seq_len(nrow(FlagsFACS$data))) {
-        new_path <- paste0(FlagsFACS$data$Name[i], "/", FlagsFACS$actualPath) 
-        index <- which(facsResult$name == new_path) 
-        
-        if (length(index) == 1) {  
-          new_column_data[i] <- facsResult$cells[index]  
-        }
-      }
-      
-      FlagsFACS$data[[new_column_name]] <- new_column_data
-      output$FacsUpload <- renderText(paste("Updated values for experimental conditions:", FlagsFACS$actualPath))
-      
-      output$FACSmatrix <- renderDT({
-        datatable(FlagsFACS$data, options = list(
-          autoWidth = TRUE,
-          columnDefs = list(
-            list(title = "", targets = 2)  # Applica la classe 'Start' alla seconda colonna
-          )
-        ))
+    }
+    
+    maxLevels <- max(facsResult$depthCount, na.rm = TRUE)
+    if (FlagsFACS$actualLevel < maxLevels) {
+      lapply((FlagsFACS$actualLevel + 1):maxLevels, function(level) {
+        updateSelectizeInput(session, paste("FACScell", level, sep = "_"), choices = list())
       })
     }
-    loadDrop() 
-  }, ignoreInit = TRUE)  
+    
+    FlagsFACS$data[[new_column_name]] <- new_column_data
+    
+    output$FacsUpload <- renderText(paste("Updated values for experimental conditions:", FlagsFACS$actualPath))
+    
+    output$FACSmatrix <- renderDT({
+      datatable(FlagsFACS$data, options = list(autoWidth = TRUE))
+    })
+  }
+  loadDrop() 
+  }, ignoreInit = TRUE)
   
-  # Funzione di aiuto per escapare i caratteri speciali di regex
+  
   escapeRegex <- function(string) {
     gsub("([\\\\^$.*+?()[{\\]|-])", "\\\\\\1", string)
   }
@@ -2410,40 +2446,109 @@ server <- function(input, output, session) {
     targetLevel <- FlagsFACS$actualLevel + 1
     currentPath <- FlagsFACS$actualPath
     
-    cat("Actual Level:", FlagsFACS$actualLevel, "\n")
-    cat("Target Level:", targetLevel, "\n")
-    cat("Current Path:", currentPath, "\n")
-    
     escapedPath <- escapeRegex(currentPath)
     regex_path <- paste0(".*", escapedPath, "/[^/]+$")
     valid_indices <- facsResult$depthCount == targetLevel & grepl(regex_path, facsResult$name)
     
-    cat("Regex for path matching:", regex_path, "\n")
-    
     valid_names <- facsResult$name[valid_indices]
     valid_names <- as.character(valid_names)
-    cat("Valid names found:", length(valid_names), "\n")
-    
+
     if (length(valid_names) > 0) {
       short_names <- sapply(strsplit(valid_names, "/", fixed = TRUE), function(x) tail(x, 1))
     } else {
-      cat("No valid names found at the targeted level\n")
-      short_names <- character(0)
+      short_names <- "no valid names found"
     }
     
+    nextInputId <- paste("FACScell", targetLevel, sep = "_")
+    nextDivId <- paste("div_FACScell", targetLevel, sep = "")
+    
     if (length(short_names) == 0) {
-      updateSelectInput(session, "FACScell", choices = list("No choices available" = ""), selected = "")
+      updateSelectInput(session, nextInputId, choices = list("No choices available" = ""), selected = "")
     } else {
-      updateSelectInput(session, "FACScell", choices = short_names, selected = character(0))
+      updateSelectInput(session, nextInputId, choices = setNames(short_names, short_names), selected = character(0))
     }
+    
+    shinyjs::runjs(paste0('setTimeout(function() { $("#', nextDivId, '").css("display", "block"); }, 200);'))
   }
   
   
-  observeEvent(input$FACScell, {
-    if (!is.null(input$FACScell) && nzchar(input$FACScell)) {
-      FlagsFACS$actualLevel <- FlagsFACS$actualLevel + 1  
+  observe({
+    if (is.null(facsResult$depthCount) || length(facsResult$depthCount) == 0) {
+      numLevels <- 0
+    } else {
+      numLevels <- max(facsResult$depthCount, na.rm = TRUE)
+    }
+    
+    if (numLevels > 0) {
+      if (exists("levelObservers", envir = .GlobalEnv)) {
+        lapply(levelObservers, function(observer) {
+          observer$destroy()
+        })
+      }
+      
+      levelObservers <<- lapply(1:numLevels, function(level) {
+        observeEvent(input[[paste("FACScell", level, sep = "_")]], {
+          selectedValue <- input[[paste("FACScell", level, sep = "_")]]
+          if (!is.null(selectedValue) && nzchar(selectedValue) && selectedValue != "no valid names found") {
+            FlagsFACS$actualLevel <- 0
+            FlagsFACS$actualLevel <- level
+          }
+        }, ignoreInit = TRUE)
+      })
+    } else {
+      if (exists("levelObservers", envir = .GlobalEnv)) {
+        lapply(levelObservers, function(observer) {
+          observer$destroy()
+        })
+      }
+      levelObservers <<- list()  
     }
   })
+  
+  observeEvent(input$SaveFACSanalysis, {
+    output$FACSresult <- renderDT({
+      datatable(FlagsFACS$data, options = list(autoWidth = TRUE))
+    })
+    
+    current_data <- FlagsFACS$data
+    processed_data <- t(apply(current_data, 1, convert_percent_to_values))
+    
+    facsResult$data <- processed_data
+    
+    output$FACSresult_value <- renderDT({
+      datatable(facsResult$data, options = list(autoWidth = TRUE))
+    })
+    
+    updateTabsetPanel(session, "SideTabs", selected = "tablesFACS")
+  })
+  
+  
+  convert_percent_to_values <- function(data_row) {
+    total_cells <- as.numeric(data_row[2])  
+   
+    if (is.na(total_cells)) {
+      return(data_row) 
+    }
+    
+    num_columns <- length(data_row)
+  
+    if (num_columns > 3) {  
+      for (i in 3:num_columns) {  
+        percent_value <- as.numeric(sub("%", "", data_row[i])) / 100
+        if (is.na(percent_value)) {
+          data_row[i] <- NA  
+          next
+        }
+        
+        calculated_value <- total_cells * percent_value
+        calculated_value <- round(calculated_value, 2)
+        data_row[i] <- calculated_value
+        total_cells = calculated_value
+      }
+    }
+    return(data_row)
+  }
+  
   ### End FACS analysis ####
   
   #start statistics
