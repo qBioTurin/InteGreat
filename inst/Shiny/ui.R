@@ -794,10 +794,6 @@ ui <- dashboardPage(
                   style="width: 95%; margin-left: 30px;", 
                   dataTableOutput("FACSresult")           
                 ),
-                fluidRow(
-                  style="width: 95%; margin-left: 30px;", 
-                  dataTableOutput("FACSresult_value")           
-                )
               ),
               fluidRow(
                 column(width = 2,offset = 9,

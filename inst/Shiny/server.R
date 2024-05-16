@@ -2505,49 +2505,39 @@ server <- function(input, output, session) {
     }
   })
   
+  convert_percent_to_final <- function(data_row) {
+    last_percentage_name <- names(data_row)[length(data_row)]
+    start_percent_index <- 2  
+
+    percentages = as.numeric(sub("%", "", data_row[start_percent_index:length(data_row)])) / 100
+    final_percentage = Reduce(`*`, percentages) * 100 
+    
+    data.frame(Name = data_row[1], FinalPercent = sprintf("%.2f%%", final_percentage)) %>%
+      setNames(c("Name", last_percentage_name))
+  }
+  
+  
   observeEvent(input$SaveFACSanalysis, {
+    start_percent_index <- 3
+    current_data <- FlagsFACS$data[, c(1, start_percent_index:ncol(FlagsFACS$data)), drop = FALSE]
+    
+    processed_data <- lapply(split(current_data, seq(nrow(current_data))), convert_percent_to_final)
+    new_data <- do.call(rbind, processed_data)
+    
+    if (is.null(facsResult$data)) {
+      facsResult$data <- new_data
+    } else {
+      if (names(facsResult$data)[ncol(facsResult$data)] != names(new_data)[2]) {
+        facsResult$data[names(new_data)[2]] <- new_data[, 2]
+      }
+    }
+    
     output$FACSresult <- renderDT({
-      datatable(FlagsFACS$data, options = list(autoWidth = TRUE))
-    })
-    
-    current_data <- FlagsFACS$data
-    processed_data <- t(apply(current_data, 1, convert_percent_to_values))
-    
-    facsResult$data <- processed_data
-    
-    output$FACSresult_value <- renderDT({
-      datatable(facsResult$data, options = list(autoWidth = TRUE))
+      datatable(facsResult$data, options = list(autoWidth = TRUE, columnDefs = list(list(visible = FALSE, targets = 0))))
     })
     
     updateTabsetPanel(session, "SideTabs", selected = "tablesFACS")
   })
-  
-  
-  convert_percent_to_values <- function(data_row) {
-    total_cells <- as.numeric(data_row[2])  
-   
-    if (is.na(total_cells)) {
-      return(data_row) 
-    }
-    
-    num_columns <- length(data_row)
-  
-    if (num_columns > 3) {  
-      for (i in 3:num_columns) {  
-        percent_value <- as.numeric(sub("%", "", data_row[i])) / 100
-        if (is.na(percent_value)) {
-          data_row[i] <- NA  
-          next
-        }
-        
-        calculated_value <- total_cells * percent_value
-        calculated_value <- round(calculated_value, 2)
-        data_row[i] <- calculated_value
-        total_cells = calculated_value
-      }
-    }
-    return(data_row)
-  }
   
   ### End FACS analysis ####
   
