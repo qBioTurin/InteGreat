@@ -744,51 +744,51 @@ ui <- dashboardPage(
           ),
           tags$style(type='text/css', "#loadAnalysis_Button { width:100%; margin-top: 20px;}")
         ),
-        box(width = 12,
-          fluidRow(
-            tags$head(
-              tags$style(HTML("
-                #dynamicSelectize { 
-                  margin-right: 40px;
-                }
-              "))
-            ),
-            uiOutput("dynamicSelectize")
-          ),
-          fluidRow(
-            column(width = 10, offset = 1,
-                   tags$div(
-                     textOutput("FacsUpload"),
-                     style = "font-size: 24px; text-align: center; color: red;
-                                             width: 100%; margin-top: 20px;"
-                     )
-                   )
-          ),
-          fluidRow(
-            tags$head(
-              tags$style(HTML("
-                #FACSmatrix { 
-                  float: left;
-                }
-              "))
-            ),
-            column(12, 
-                   dataTableOutput("FACSmatrix")          
-                   )
-          ),
-          fluidRow(
-            column(2, offset = 9,
-            actionButton(inputId = "SaveFACSanalysis",
-                         label = 'Save',
-                         style = "width: 100%",
-                         align = "right",
-                         icon = shiny::icon("forward"))
-            )
-          )
-        )
       ),
       tabItem(tabName = "tablesFACS",
               h2("Quantification"),
+              box(width = 12,
+                  fluidRow(
+                    tags$head(
+                      tags$style(HTML("
+                      #dynamicSelectize { 
+                        margin-right: 40px;
+                      }
+                    "))
+                    ),
+                    uiOutput("dynamicSelectize")
+                  ),
+                  fluidRow(
+                    column(width = 10, offset = 1,
+                           tags$div(
+                             textOutput("FacsUpload"),
+                             style = "font-size: 24px; text-align: center; color: red;
+                                             width: 100%; margin-top: 20px;"
+                           )
+                    )
+                  ),
+                  fluidRow(
+                    tags$head(
+                      tags$style(HTML("
+                      #FACSmatrix { 
+                        float: left;
+                      }
+                    "))
+                    ),
+                    column(12, 
+                           dataTableOutput("FACSmatrix")          
+                    )
+                  ),
+                  fluidRow(
+                    column(2, offset = 9,
+                           actionButton(inputId = "SaveFACSanalysis",
+                                        label = 'Save',
+                                        style = "width: 100%",
+                                        align = "right",
+                                        icon = shiny::icon("forward"))
+                    )
+                  )
+              ),
               box(width = 12,
                 fluidRow(
                   style="width: 95%; margin-left: 30px;", 

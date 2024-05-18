@@ -2325,17 +2325,25 @@ server <- function(input, output, session) {
           }
         }
         
-        print(facsResult$statistics)
         removeModal()
         
         maxDepth <- max(facsResult$depthCount, na.rm = TRUE)
-        updateSelectizeUI(maxDepth)
-        FlagsFACS$actualLevel <- 0
         
-        showAlert("Success", "The Excel has been uploaded with success", "success", 2000)
+        # Primo: cambia la tab
+        updateTabsetPanel(session, "SideTabs", selected = "tablesFACS")
+        
+        # Secondo: Ascolta il cambio della tab e poi esegue le funzioni
+        observeEvent(input$SideTabs, {
+          if (input$SideTabs == "tablesFACS") {
+            updateSelectizeUI(maxDepth)
+            FlagsFACS$actualLevel <- 0
+            showAlert("Success", "The Excel has been uploaded with success", "success", 2000)
+          }
+        }, ignoreInit = TRUE)  # Assicurati di non eseguire al primo caricamento
       }
     }
   }
+  
   
   updateSelectizeUI <- function(maxDepth) {
     output$dynamicSelectize <- renderUI({
@@ -2536,7 +2544,6 @@ server <- function(input, output, session) {
       datatable(facsResult$data, options = list(autoWidth = TRUE, columnDefs = list(list(visible = FALSE, targets = 0))))
     })
     
-    updateTabsetPanel(session, "SideTabs", selected = "tablesFACS")
   })
   
   ### End FACS analysis ####
