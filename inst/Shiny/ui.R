@@ -511,16 +511,29 @@ ui <- dashboardPage(
                               checkboxGroupInput(inputId = "ELISA_blanks",
                                                  "Select blank:")
                        )
+                     ),
+                     fluidRow(
+                       column(12,
+                              tags$div(
+                                textOutput("ELISASelectedValues"),
+                                style = "font-size: 24px; text-align: center; color: green;
+                                             width: 100%; margin-top: 20px;"
+                              )
+                       )
                      )
-              ),
-              fluidRow(
-                column(width = 1,offset = 9,
-                       actionButton(inputId = "NextElisaQuantif",
-                                    label = 'Proceed to Quantification',
-                                    align = "right",
-                                    icon = shiny::icon("forward"))
-                )
               )
+            ),
+          fluidRow(
+            column(6, dataTableOutput("leftTableElisa")),
+            column(6, dataTableOutput("rightTableElisa"))
+          ),
+          fluidRow(
+            column(width = 1,offset = 9,
+                   actionButton(inputId = "NextElisaQuantif",
+                                label = 'Proceed to Quantification',
+                                align = "right",
+                                icon = shiny::icon("forward"))
+            )
           )
         )
       ),
@@ -633,7 +646,7 @@ ui <- dashboardPage(
               column(width = 6,
                      fluidRow(
                         column(width = 8, offset = 2,
-                               selectizeInput("ENDOCcell_SN",
+                               selectizeInput("ENDOCcell_EXP",
                                               label = "Experimental condition:",
                                               choices = c(),  
                                               options = list(create = TRUE))
@@ -669,8 +682,8 @@ ui <- dashboardPage(
                 )
               ),
               fluidRow(
-                column(6, dataTableOutput("leftTable")),
-                column(6, dataTableOutput("rightTable"))
+                column(6, dataTableOutput("leftTableEndoc")),
+                column(6, dataTableOutput("rightTableEndoc"))
               ),
               fluidRow(
                 column(width = 1,offset = 9,
@@ -757,15 +770,6 @@ ui <- dashboardPage(
                     "))
                     ),
                     uiOutput("dynamicSelectize")
-                  ),
-                  fluidRow(
-                    column(width = 10, offset = 1,
-                           tags$div(
-                             textOutput("FacsUpload"),
-                             style = "font-size: 24px; text-align: center; color: red;
-                                             width: 100%; margin-top: 20px;"
-                           )
-                    )
                   ),
                   fluidRow(
                     tags$head(

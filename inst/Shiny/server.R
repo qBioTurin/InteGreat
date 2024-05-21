@@ -1267,6 +1267,7 @@ server <- function(input, output, session) {
     dataFinal = NULL,
     ELISAcell_EXP = NULL,
     ELISAcell_SN = NULL,
+    ELISAcell_COLOR = NULL,
     MapBaseline = NULL,
     MapBlank = NULL,
     Tablestandcurve = NULL,
@@ -1279,10 +1280,14 @@ server <- function(input, output, session) {
     dataFinal = NULL,
     ELISAcell_EXP = NULL,
     ELISAcell_SN = NULL,
+    ELISAcell_COLOR = NULL,
     MapBaseline = NULL,
     MapBlank = NULL,
     Tablestandcurve = NULL,
     Regression = NULL)
+  
+  left_data_elisa <- reactiveVal()
+  right_data_elisa <- reactiveVal()
   
   # save everytime there is a change in the results
   ELISAresultListen <- reactive({
@@ -1348,7 +1353,6 @@ server <- function(input, output, session) {
     }
   }
   
-  
   observe({
     if (!is.null(elisaResult$Initdata) && is.null(elisaResult$TablePlot)) {
       tableExcelColored(session = session,
@@ -1357,96 +1361,6 @@ server <- function(input, output, session) {
                         type = "Initialize")
     }
   })
-  
-  observeEvent(elisaResult$TablePlot, {
-    ELISAtb = elisaResult$TablePlot
-    output$ELISAmatrix <- renderDT(
-      ELISAtb,
-      server = FALSE
-    )
-
-    matTime =  as.matrix(elisaResult$ELISAcell_EXP)
-    matExp =  as.matrix(elisaResult$ELISAcell_SN)
-    
-    if( !( all(matTime == "")  || all(matExp == "") ) ){
-      mat = as.matrix(elisaResult$Initdata)
-      elisaV = expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
-        rowwise() %>%
-        mutate(values = mat[Var1, Var2])
-      elisaT = expand.grid(seq_len(nrow(matTime)), seq_len(ncol(matTime))) %>%
-        rowwise() %>%
-        mutate(time = matTime[Var1, Var2])
-      endocE = expand.grid(seq_len(nrow(matExp)), seq_len(ncol(matExp))) %>%
-        rowwise() %>%
-        mutate(exp = matExp[Var1, Var2])
-      elisaTot = merge(elisaV,merge(elisaT,elisaE)) %>%
-        na.omit() %>%
-        filter(time != "",  exp != "") 
-      
-      elisaResult$data = elisaTot
-      
-      output$ENDOCinitplots <- renderPlot(
-        ggplot(endocTot, aes(x = time, y=values, col = exp),alpha = 1.4) +
-          #geom_boxplot(aes(fill= exp, group = time),alpha = 0.4) +
-          geom_point(aes(group = exp)) +
-          scale_color_manual(values = FlagsENDOC$EXPcol) + 
-          #scale_fill_manual(values = FlagsENDOC$EXPcol) + 
-          theme_bw()+
-          labs(x = "Times", y = "Values", col = "Exp",fill = "Exp")+
-          theme(legend.position = c(0, 1), 
-                legend.justification = c(0, 1),
-                legend.direction = "vertical",
-                legend.background = element_rect(size=0.5,
-                                                 linetype="solid",
-                                                 colour ="black"))
-      )
-    }
-  })
-  
-  observe({
-    if( !is.null(elisaResult$Initdata) && is.null(elisaResult$TablePlot) ){
-      ELISAtb = elisaResult$Initdata
-
-      ELISAtb.colors = ELISAtb
-      ELISAtb.colors[,] = ""
-      mELISA  =cbind(ELISAtb,ELISAtb.colors)
-
-      cols.keep <- paste0('V',1:length(ELISAtb[1,]))
-      cols.color <- paste0('Col',1:length(ELISAtb[1,]))
-
-      colnames(mELISA) = c(cols.keep,cols.color)
-
-      ELISAtb = datatable(mELISA,
-                          filter = 'none',
-                          #server = FALSE,
-                          selection = list(mode = 'single', target = 'cell'),
-                          rownames= FALSE,
-                          options = list(
-                            #lengthChange = FALSE,
-                            #scrollX = TRUE,
-                            columnDefs = list(list(targets = cols.color,
-                                                   visible = FALSE))
-                          )) %>%
-      formatStyle(cols.keep,
-                  cols.color,
-                  backgroundColor = styleEqual("", 'white'))
-
-      ELISA = ELISAtb$x$data
-      output$ELISAmatrix <-renderDataTable({ELISAtb}
-      )
-
-      ELISAcell_SN <- ELISAcell_EXP <- matrix(
-        "",
-        nrow = length(ELISA[,1]),
-        ncol = length(ELISA[1,])
-      )
-      elisaResult$ELISAcell_SN <- ELISAcell_SN
-      elisaResult$ELISAcell_EXP<- ELISAcell_EXP
-      elisaResult$TablePlot = ELISAtb
-    }
-  })
-
-  #### END Elisa analysis
   
   #### ENDOCYTOSIS analysis ####
   observeEvent(input$NextEndocQuantif,{
@@ -1460,7 +1374,7 @@ server <- function(input, output, session) {
     TablePlot = NULL,
     dataFinal = NULL,
     ENDOCcell_TIME = NULL,
-    ENDOCcell_SN = NULL,
+    ENDOCcell_COLOR = NULL,
     ENDOCcell_EXP = NULL,
     MapBaseline = NULL,
     MapBlank = NULL)
@@ -1471,7 +1385,7 @@ server <- function(input, output, session) {
     TablePlot = NULL,
     dataFinal = NULL,
     ENDOCcell_TIME = NULL,
-    ENDOCcell_SN = NULL,
+    ENDOCcell_COLOR = NULL,
     MapBaseline = NULL,
     MapBlank = NULL)
   
@@ -1491,8 +1405,8 @@ server <- function(input, output, session) {
                                EXPselected = "",
                                EXPcol = NULL)
   
-  left_data <- reactiveVal()
-  right_data <- reactiveVal()
+  left_data_endoc <- reactiveVal()
+  right_data_endoc <- reactiveVal()
   
   observeEvent(input$LoadENDOC_Button,{
     alert$alertContext <- "ENDOC-reset"
@@ -1515,11 +1429,11 @@ server <- function(input, output, session) {
       updateCheckboxGroupInput(session, "ENDOC_baselines", choices = list(), selected = character(0))
       updateCheckboxGroupInput(session, "ENDOC_blanks", choices = list(), selected = character(0))
   
-      updateSelectizeInput(session, "ENDOCcell_SN", choices = character(0), selected = character(0))
+      updateSelectizeInput(session, "ENDOCcell_EXP", choices = character(0), selected = character(0))
       updateSelectizeInput(session, "ENDOCcell_TIME", choices = character(0), selected = character(0))
       
-      left_data <- NULL
-      right_data <- NULL
+      left_data_endoc <- NULL
+      right_data_endoc <- NULL
       loadExcelFileENDOC()
     }
   })
@@ -1544,7 +1458,7 @@ server <- function(input, output, session) {
       } else {
         endocResult$Initdata = mess$x
         FlagsENDOC$EXPcol = mess$fill
-        endocResult$ENDOCcell_SN = mess$SNtable
+        endocResult$ENDOCcell_COLOR = mess$SNtable
         
         removeModal()
         showAlert("Success", "The Excel has been uploaded  with success", "success", 2000)
@@ -1560,64 +1474,6 @@ server <- function(input, output, session) {
     }
   })
     
-  get_formatted_data <- function(colors, color_names) {
-    if (length(colors) == 0) {
-      return(data.frame(Color = character(), Values = character(), ExperimentalCondition = character(), ColorCode = character()))
-    }
-    
-    formatted_data <- vector("list", length(colors))
-    for (i in seq_along(colors)) {
-      # Trova gli indici corrispondenti al color_name attuale in endocCell_SN
-      matching_indices <- which(endocResult$ENDOCcell_SN == color_names[i], arr.ind = TRUE)
-      
-      if (nrow(matching_indices) > 0) {
-        selected_values <- apply(matching_indices, 1, function(idx) {
-          endocResult$Initdata[idx["row"], idx["col"]]
-        })
-        
-        formatted_output <- paste(unlist(selected_values), collapse = " - ")
-        
-        time_values <- apply(matching_indices, 1, function(idx) {
-          val <- endocResult$ENDOCcell_TIME[idx["row"], idx["col"]]
-          # Controlla esplicitamente per NA e stringhe vuote
-          if (!is.na(val) && val != "") {
-            return(val)
-          } else {
-            return("")
-          }
-        })
-        
-        time_output <- paste(unlist(time_values), collapse = " - ")
-        
-        exp_values <- apply(matching_indices, 1, function(idx) {
-          endocResult$ENDOCcell_EXP[idx["row"], idx["col"]]
-        })
-        if (length(unique(exp_values)) == 1) {
-          exp_condition <- ifelse(exp_values[1] == "" || is.na(exp_values[1]), "-", exp_values[1])
-        } else {
-          exp_condition <- "No matching between values"
-        }
-        
-        formatted_data[[i]] <- data.frame(
-          ColorCode = color_names[i],
-          Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
-          Values = formatted_output,
-          ExperimentalCondition = exp_condition,
-          Time = ifelse(time_output == "", "-", time_output)  
-        )
-      } else {
-        formatted_data[[i]] <- data.frame(
-          ColorCode = color_names[i],
-          Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
-          Values = "No matching indices found.",
-          ExperimentalCondition = "-",
-          Time = "-"
-        )
-      }
-    }
-    return(do.call(rbind, formatted_data))
-  }
-    
   observe({
     color_codes <- FlagsENDOC$EXPcol
     color_names <- names(FlagsENDOC$EXPcol)
@@ -1630,14 +1486,14 @@ server <- function(input, output, session) {
     left_colors <- color_codes[1:mid_point]
     right_colors <- color_codes[(mid_point+1):length(color_codes)]
     
-    left_formatted_data <- get_formatted_data(left_colors, color_names[1:mid_point])
-    right_formatted_data <- get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)])
+    left_formatted_data <- get_formatted_data(left_colors, color_names[1:mid_point], endocResult, endocResult$ENDOCcell_EXP, endocResult$ENDOCcell_TIME,"ENDOC")
+    right_formatted_data <- get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)], endocResult, endocResult$ENDOCcell_EXP, endocResult$ENDOCcell_TIME, "ENDOC")
   
-    left_data(left_formatted_data)
-    right_data(right_formatted_data)
+    left_data_endoc(left_formatted_data)
+    right_data_endoc(right_formatted_data)
     
-    output$leftTable <- renderDataTable(
-      left_data(), 
+    output$leftTableEndoc <- renderDataTable(
+      left_data_endoc(), 
       escape = FALSE, 
       editable = list(target = "cell", disable = list(columns = 0:3)),
       options = list(
@@ -1657,8 +1513,8 @@ server <- function(input, output, session) {
       )
     )
     
-    output$rightTable <- renderDataTable(
-      right_data(), 
+    output$rightTableEndoc <- renderDataTable(
+      right_data_endoc(), 
       escape = FALSE, 
       editable = list(target = "cell", disable = list(columns = 0:3)),
       options = list(
@@ -1681,11 +1537,11 @@ server <- function(input, output, session) {
   })
 
   
-  observeEvent(input$leftTable_cell_edit, {
-    info <- input$leftTable_cell_edit
+  observeEvent(input$leftTableEndoc_cell_edit, {
+    info <- input$leftTableEndoc_cell_edit
     req(info)  
     
-    data <- left_data() 
+    data <- left_data_endoc() 
     selected_row <- info$row
     selected_col <- info$col
     new_value <- info$value
@@ -1694,19 +1550,19 @@ server <- function(input, output, session) {
       color_code <- data[selected_row, "ColorCode"]
       
       if (!is.na(color_code) && color_code != "" && color_code != "white" && color_code != "#FFFFFF") {
-        matchingIndices <- which(endocResult$ENDOCcell_SN == color_code, arr.ind = TRUE)
+        matchingIndices <- which(endocResult$ENDOCcell_COLOR == color_code, arr.ind = TRUE)
         
         if (nrow(matchingIndices) > 0) {
           currentValues <- c()
           
           apply(matchingIndices, 1, function(idx) {
             currentValues <<- c(currentValues, endocResult$Initdata[idx["row"], idx["col"]])
-            old_value_key <- names(FlagsENDOC$EXPcol)[names(FlagsENDOC$EXPcol) == endocResult$ENDOCcell_SN[idx["row"], idx["col"]]]
+            old_value_key <- names(FlagsENDOC$EXPcol)[names(FlagsENDOC$EXPcol) == endocResult$ENDOCcell_COLOR[idx["row"], idx["col"]]]
             if (length(old_value_key) > 0) {
               FlagsENDOC$EXPcol[new_value] <- FlagsENDOC$EXPcol[old_value_key]
               FlagsENDOC$EXPcol <- FlagsENDOC$EXPcol[!names(FlagsENDOC$EXPcol) %in% old_value_key]
             }
-            endocResult$ENDOCcell_SN[idx["row"], idx["col"]] <- new_value
+            endocResult$ENDOCcell_COLOR[idx["row"], idx["col"]] <- new_value
             endocResult$ENDOCcell_EXP[idx["row"], idx["col"]] <- new_value
           })
           
@@ -1727,7 +1583,7 @@ server <- function(input, output, session) {
       color_code <- data[selected_row, "ColorCode"]
       req(color_code != "", color_code != "white", color_code != "#FFFFFF")
       
-      matchingIndices <- which(endocResult$ENDOCcell_SN == color_code, arr.ind = TRUE)
+      matchingIndices <- which(endocResult$ENDOCcell_COLOR == color_code, arr.ind = TRUE)
       numMatches <- nrow(matchingIndices)
       
       new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
@@ -1752,11 +1608,11 @@ server <- function(input, output, session) {
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   
-  observeEvent(input$rightTable_cell_edit, {
-    info <- input$rightTable_cell_edit
+  observeEvent(input$rightTableEndoc_cell_edit, {
+    info <- input$rightTableEndoc_cell_edit
     req(info)  
     
-    data <- right_data() 
+    data <- right_data_endoc() 
     selected_row <- info$row
     selected_col <- info$col
     new_value <- info$value
@@ -1765,19 +1621,19 @@ server <- function(input, output, session) {
       color_code <- data[selected_row, "ColorCode"]
       
       if (!is.na(color_code) && color_code != "" && color_code != "white" && color_code != "#FFFFFF") {
-        matchingIndices <- which(endocResult$ENDOCcell_SN == color_code, arr.ind = TRUE)
+        matchingIndices <- which(endocResult$ENDOCcell_COLOR == color_code, arr.ind = TRUE)
         
         if (nrow(matchingIndices) > 0) {
           currentValues <- c()
           
           apply(matchingIndices, 1, function(idx) {
             currentValues <<- c(currentValues, endocResult$Initdata[idx["row"], idx["col"]])
-            old_value_key <- names(FlagsENDOC$EXPcol)[names(FlagsENDOC$EXPcol) == endocResult$ENDOCcell_SN[idx["row"], idx["col"]]]
+            old_value_key <- names(FlagsENDOC$EXPcol)[names(FlagsENDOC$EXPcol) == endocResult$ENDOCcell_COLOR[idx["row"], idx["col"]]]
             if (length(old_value_key) > 0) {
               FlagsENDOC$EXPcol[new_value] <- FlagsENDOC$EXPcol[old_value_key]
               FlagsENDOC$EXPcol <- FlagsENDOC$EXPcol[!names(FlagsENDOC$EXPcol) %in% old_value_key]
             }
-            endocResult$ENDOCcell_SN[idx["row"], idx["col"]] <- new_value
+            endocResult$ENDOCcell_COLOR[idx["row"], idx["col"]] <- new_value
             endocResult$ENDOCcell_EXP[idx["row"], idx["col"]] <- new_value
           })
           
@@ -1798,7 +1654,7 @@ server <- function(input, output, session) {
       color_code <- data[selected_row, "ColorCode"]
       req(color_code != "", color_code != "white", color_code != "#FFFFFF")
       
-      matchingIndices <- which(endocResult$ENDOCcell_SN == color_code, arr.ind = TRUE)
+      matchingIndices <- which(endocResult$ENDOCcell_COLOR == color_code, arr.ind = TRUE)
       numMatches <- nrow(matchingIndices)
       
       new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
@@ -1822,7 +1678,6 @@ server <- function(input, output, session) {
     }
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
-  
   observeEvent(input$ENDOCmatrix_cell_clicked, {
     req(input$ENDOCmatrix_cell_clicked)  
     
@@ -1839,28 +1694,28 @@ server <- function(input, output, session) {
     allConditions <- unique(na.omit(c(endocResult$ENDOCcell_EXP)))  
     selectedCondition <- ifelse(is.null(endocResult$ENDOCcell_EXP[cellCoo[1], cellCoo[2]]), "", endocResult$ENDOCcell_EXP[cellCoo[1], cellCoo[2]])
     
-    updateSelectizeInput(inputId = "ENDOCcell_SN",
+    updateSelectizeInput(inputId = "ENDOCcell_EXP",
                          choices = allConditions,
                          selected = selectedCondition)
   })
   
-  observeEvent(input$ENDOCcell_SN, {
-    if (!is.null(endocResult$ENDOCcell_SN) && !is.null(FlagsENDOC$cellCoo) && !anyNA(FlagsENDOC$cellCoo)) {
+  observeEvent(input$ENDOCcell_EXP, {
+    if (!is.null(endocResult$ENDOCcell_COLOR) && !is.null(FlagsENDOC$cellCoo) && !anyNA(FlagsENDOC$cellCoo)) {
       ENDOCtb = endocResult$TablePlot
       cellCoo = FlagsENDOC$cellCoo
       
-      value.bef = endocResult$ENDOCcell_SN[cellCoo[1], cellCoo[2]] 
-      value.now = input$ENDOCcell_SN
+      value.bef = endocResult$ENDOCcell_COLOR[cellCoo[1], cellCoo[2]] 
+      value.now = input$ENDOCcell_EXP
       
       if (value.now != "" && value.now != value.bef) {
         currentValues <- endocResult$Initdata[cellCoo[1], cellCoo[2]]
         
-        endocResult$ENDOCcell_SN[cellCoo[1], cellCoo[2]] = value.now
+        endocResult$ENDOCcell_COLOR[cellCoo[1], cellCoo[2]] = value.now
         endocResult$ENDOCcell_EXP[cellCoo[1], cellCoo[2]] = value.now
         ENDOCtb$x$data[cellCoo[1], paste0("Col", cellCoo[2])] = value.now
         
-        if (!input$ENDOCcell_SN %in% FlagsENDOC$AllExp) {
-          exp = unique(c(FlagsENDOC$AllExp, input$ENDOCcell_SN))
+        if (!input$ENDOCcell_EXP %in% FlagsENDOC$AllExp) {
+          exp = unique(c(FlagsENDOC$AllExp, input$ENDOCcell_EXP))
           FlagsENDOC$AllExp = exp
         }
         
@@ -1967,9 +1822,9 @@ server <- function(input, output, session) {
     }
     
     if(length(listReturn) == 0){
-      return(list("Nothing",endocResult$ENDOCcell_TIME,endocResult$ENDOCcell_SN))
+      return(list("Nothing",endocResult$ENDOCcell_TIME,endocResult$ENDOCcell_COLOR))
     }else{
-      return(c(listReturn,list(endocResult$ENDOCcell_TIME,endocResult$ENDOCcell_SN)) )
+      return(c(listReturn,list(endocResult$ENDOCcell_TIME,endocResult$ENDOCcell_COLOR)) )
     }
   })
   
@@ -2016,7 +1871,7 @@ server <- function(input, output, session) {
         endocT = expand.grid(seq_len(nrow(matTime)), seq_len(ncol(matTime))) %>%
           rowwise() %>%
           mutate(time = matTime[Var1, Var2])
-        matExp =  as.matrix(endocResult$ENDOCcell_SN)
+        matExp =  as.matrix(endocResult$ENDOCcell_COLOR)
         endocE = expand.grid(seq_len(nrow(matExp)), seq_len(ncol(matExp))) %>%
           rowwise() %>%
           mutate(exp = matExp[Var1, Var2])
@@ -2151,7 +2006,7 @@ server <- function(input, output, session) {
     
     ##### Plot the values selected!
     matTime =  as.matrix(endocResult$ENDOCcell_TIME)
-    matExp =  as.matrix(endocResult$ENDOCcell_SN)
+    matExp =  as.matrix(endocResult$ENDOCcell_COLOR)
     
     if( !( all(matTime == "")  || all(matExp == "") ) ){
       mat = as.matrix(endocResult$Initdata)
@@ -2181,7 +2036,7 @@ server <- function(input, output, session) {
           theme(legend.position = c(0, 1), 
                 legend.justification = c(0, 1),
                 legend.direction = "vertical",
-                legend.background = element_rect(size=0.5,
+                legend.background = element_rect(linewidth = 0.5,
                                                  linetype="solid",
                                                  colour ="black"))
       )
@@ -2399,7 +2254,6 @@ server <- function(input, output, session) {
         )
       ))
     })
-    output$FacsUpload <- renderText("choose a value from the dropdown")
   } else {
     selected_item <- input[[currentInputId]]
     path_components <- strsplit(FlagsFACS$actualPath, "/")[[1]]
@@ -2435,8 +2289,6 @@ server <- function(input, output, session) {
     }
     
     FlagsFACS$data[[new_column_name]] <- new_column_data
-    
-    output$FacsUpload <- renderText(paste("Updated values for experimental conditions:", FlagsFACS$actualPath))
     
     output$FACSmatrix <- renderDT({
       datatable(FlagsFACS$data, options = list(autoWidth = TRUE))
@@ -2743,7 +2595,7 @@ server <- function(input, output, session) {
       return (FALSE)
     if (!is.null(endocResult$Initdata) || !is.null(cytotoxResult$data) ||
         !is.null(endocResult$TablePlot) || !is.null(cytotoxResult$dataFinal) ||
-        !is.null(endocResult$ENDOCcell_TIME) || !is.null(cytotoxResult$ENDOCcell_SN) ||
+        !is.null(endocResult$ENDOCcell_TIME) || !is.null(cytotoxResult$ENDOCcell_COLOR) ||
         !is.null(endocResult$MapBaseline) || !is.null(cytotoxResult$MapBlank))
       return (FALSE)
   

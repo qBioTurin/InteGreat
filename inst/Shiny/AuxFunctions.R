@@ -58,7 +58,7 @@ resetPanel <- function(type, flags = NULL, panelStructures = NULL, numberOfPlane
            result$TablePlot <- NULL
            result$dataFinal <- NULL
            result$ENDOCcell_TIME <- NULL
-           result$ENDOCcell_SN <- NULL
+           result$ENDOCcell_COLOR <- NULL
            result$MapBaseline <- NULL
            result$MapBlank <- NULL
 
@@ -423,7 +423,7 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
       if(is.null(FlagsExp$EXPcol)){
         ExpDataTable.colors = matrix("",nrow = nrow(ExpDataTable),ncol=ncol(ExpDataTable))
       }else{
-        ExpDataTable.colors = Result[[grep(x=names(Result), pattern = "cell_SN", value = T)]]
+        ExpDataTable.colors = Result[[grep(x=names(Result), pattern = "cell_COLOR", value = T)]]
         if(is.null(ExpDataTable.colors) || nrow(ExpDataTable.colors) != nrow(ExpDataTable)) {
           ExpDataTable.colors = matrix("", nrow = nrow(ExpDataTable), ncol = ncol(ExpDataTable))
         }
@@ -466,15 +466,15 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
         formatStyle(cols.keep,
                     cols.color,
                     backgroundColor = styleEqual(names(EXPcol), EXPcol) )
-      cell_SN <- ExpDataTable.colors
+      cell_COLOR <- ExpDataTable.colors
       cell_TIME <- cell_EXP <- cell_REP <- matrix(
         "",
         nrow = length(ExpDataTable$x$data[,1]),
         ncol = length(ExpDataTable$x$data[1,])
       )
       
-      if(length(grep(x=names(Result),pattern = "cell_SN", value = T))>0)
-        Result[[grep(x=names(Result),pattern = "cell_SN", value = T)]] <- cell_SN
+      if(length(grep(x=names(Result),pattern = "cell_COLOR", value = T))>0)
+        Result[[grep(x=names(Result),pattern = "cell_COLOR", value = T)]] <- cell_COLOR
       if(length(grep(x=names(Result),pattern = "cell_EXP", value = T))>0)
         Result[[grep(x=names(Result),pattern = "cell_EXP", value = T)]]<- cell_EXP
       if(length(grep(x=names(Result),pattern = "cell_REP", value = T))>0)
@@ -507,7 +507,7 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
       }
       
       ExpDataTable = Result$TablePlot$x$data
-      completeExpDataTable = cbind(Result$Initdata, Result[[grep(x=names(Result), pattern = "cell_SN", value = TRUE)]])
+      completeExpDataTable = cbind(Result$Initdata, Result[[grep(x=names(Result), pattern = "cell_COLOR", value = TRUE)]])
       colnames(completeExpDataTable) = colnames(ExpDataTable)
       
       cols.color = grep(x = colnames(ExpDataTable), pattern = "Col", value = TRUE)
@@ -540,4 +540,68 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
     }
   )
 }
+
+get_formatted_data <- function(colors, color_names, result, multipleValue, singleValue, analysis) {
+  if (length(colors) == 0) {
+    return(data.frame(Color = character(), Values = character(), ExperimentalCondition = character(), ColorCode = character()))
+  }
+  
+  formatted_data <- vector("list", length(colors))
+  column_COLOR <- paste0(analysis, "cell_COLOR")  
+  column_TIME <- paste0(analysis, "cell_TIME")  
+  column_EXP <- paste0(analysis, "cell_EXP") 
+  
+  for (i in seq_along(colors)) {
+    matching_indices <- which(result[[column_COLOR]] == color_names[i], arr.ind = TRUE)
+    
+    if (nrow(matching_indices) > 0) {
+      selected_values <- apply(matching_indices, 1, function(idx) {
+        result$Initdata[idx["row"], idx["col"]]
+      })
+      
+      formatted_output <- paste(unlist(selected_values), collapse = " - ")
+      
+       time_values <- apply(matching_indices, 1, function(idx) {
+         val <- singleValue[idx["row"], idx["col"]]
+         print(val)
+         if (!is.na(val) && !is.null(val) && val != "") {
+           return(val)
+         } else {
+           return("")
+         }
+       })
+      
+      time_output <- paste(unlist(time_values), collapse = " - ")
+      
+      exp_values <- apply(matching_indices, 1, function(idx) {
+        result[[column_EXP]][idx["row"], idx["col"]]
+      })
+      
+      if (length(unique(exp_values)) == 1) {
+        exp_condition <- ifelse(exp_values[1] == "" || is.na(exp_values[1]), "-", exp_values[1])
+      } else {
+        exp_condition <- "No matching between values"
+      }
+      
+      formatted_data[[i]] <- data.frame(
+        ColorCode = color_names[i],
+        Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
+        Values = formatted_output,
+        ExperimentalCondition = exp_condition,
+        Time = ifelse(time_output == "", "-", time_output)  
+      )
+    } else {
+      formatted_data[[i]] <- data.frame(
+        ColorCode = color_names[i],
+        Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
+        Values = "No matching indices found.",
+        ExperimentalCondition = "-",
+        Time = "-"
+      )
+    }
+  }
+  return(do.call(rbind, formatted_data))
+}
+
+
   
