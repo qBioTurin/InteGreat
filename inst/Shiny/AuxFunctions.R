@@ -84,6 +84,7 @@ resetPanel <- function(type, flags = NULL, panelStructures = NULL, numberOfPlane
            result$dataFinal <- NULL
            result$ELISAcell_EXP <- NULL
            result$ELISAcell_SN <- NULL
+           result$ELISAcell_COLOR <- NULL
            result$MapBaseline <- NULL
            result$MapBlank <- NULL
            result$Tablestandcurve <- NULL
@@ -173,12 +174,14 @@ readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = 
     },
     "Excel" = {
       if(!isFileUploaded || !file.exists(filename)) {
-        return (list(message = "Please, select an Excel file",call = ""))
+        return (list(message = "Please, select an Excel file", call = ""))
       } else if(tolower(tools::file_ext(filename)) != "xls" && tolower(tools::file_ext(filename)) != "xlsx") {
         return(list(message = "Please, upload a file with a .xls or .xlsx extension.", call = ""))
       } 
       
       x = readxl::read_excel(filename, col_names = colname)
+      x <- x[, !is.na(colnames(x))]
+      
       if (allDouble) {
         xstr = which(sapply(x, function(col) !is.numeric(col)))
         if (length(xstr) > 0) {
@@ -201,8 +204,11 @@ readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = 
             } else {
               color = randomcoloR::randomColor(1)
             }
+            if (color == "#FFFFFF") { 
+              color = "white"
+            }
             df = data.frame(row = x$rows, col = x$cols,
-                            fill = ifelse(length(x$style$fill$fillFg) > 0, 
+                            fill = ifelse(length(x$style$fill$fillFg) > 0 && color != "white", 
                                           color,
                                           "white"))
           }
@@ -214,11 +220,15 @@ readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = 
         tb.SN = matrix("", nrow = max(l$row), ncol = max(l$col))
         
         for (j in 1:ncol(tb.SN)) {
-          fill_col = l %>% filter(col == j)
-          tb.SN[fill_col$row, j] = fill_col$SN
+          fill_col = dplyr::filter(l, col == j)
+          if (!all(fill_col$fill == "white")) {
+            tb.SN[fill_col$row, j] = fill_col$SN
+          }
         }
         
-        col = l %>% select(fill, SN) %>% distinct()
+        tb.SN <- tb.SN[, colSums(tb.SN != "") > 0]
+        
+        col = dplyr::select(l, fill, SN) %>% dplyr::distinct()
         vectcol = col$fill
         names(vectcol) = col$SN
         
@@ -541,7 +551,7 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
   )
 }
 
-get_formatted_data <- function(colors, color_names, result, multipleValue, singleValue, analysis) {
+get_formatted_data <- function(colors, color_names, result, singleValue, analysis) {
   if (length(colors) == 0) {
     return(data.frame(Color = character(), Values = character(), ExperimentalCondition = character(), ColorCode = character()))
   }
@@ -549,11 +559,20 @@ get_formatted_data <- function(colors, color_names, result, multipleValue, singl
   formatted_data <- vector("list", length(colors))
   column_COLOR <- paste0(analysis, "cell_COLOR")  
   column_TIME <- paste0(analysis, "cell_TIME")  
-  column_EXP <- paste0(analysis, "cell_EXP") 
+  
+  # Set variable names based on analysis type
+  if (analysis == "ELISA") {
+    value1 = "Sample Name"
+    value2 = "Experimental condition"
+    column_EXP <- paste0(analysis, "cell_SN") 
+  } else if (analysis == "ENDOC") {
+    value1 = "Experimental condition"
+    value2 = "Time"
+    column_EXP <- paste0(analysis, "cell_EXP") 
+  }
   
   for (i in seq_along(colors)) {
     matching_indices <- which(result[[column_COLOR]] == color_names[i], arr.ind = TRUE)
-    
     if (nrow(matching_indices) > 0) {
       selected_values <- apply(matching_indices, 1, function(idx) {
         result$Initdata[idx["row"], idx["col"]]
@@ -561,15 +580,11 @@ get_formatted_data <- function(colors, color_names, result, multipleValue, singl
       
       formatted_output <- paste(unlist(selected_values), collapse = " - ")
       
-       time_values <- apply(matching_indices, 1, function(idx) {
-         val <- singleValue[idx["row"], idx["col"]]
-         print(val)
-         if (!is.na(val) && !is.null(val) && val != "") {
-           return(val)
-         } else {
-           return("")
-         }
-       })
+      time_values <- apply(matching_indices, 1, function(idx) {
+        val <- if (analysis == "ELISA") result$ELISAcell_EXP[idx["row"], idx["col"]]
+        else result$ENDOCcell_TIME[idx["row"], idx["col"]]
+        if (!is.na(val) && !is.null(val) && val != "") val else ""
+      })
       
       time_output <- paste(unlist(time_values), collapse = " - ")
       
@@ -583,25 +598,32 @@ get_formatted_data <- function(colors, color_names, result, multipleValue, singl
         exp_condition <- "No matching between values"
       }
       
-      formatted_data[[i]] <- data.frame(
-        ColorCode = color_names[i],
-        Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
-        Values = formatted_output,
-        ExperimentalCondition = exp_condition,
-        Time = ifelse(time_output == "", "-", time_output)  
+      formatted_data[[i]] <- setNames(
+        data.frame(
+          ColorCode = color_names[i],
+          Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px;'></div>", colors[i]),
+          Values = formatted_output,
+          exp_condition,
+          time_output
+        ),
+        c("ColorCode", "Color", "Values", value1, value2)
       )
     } else {
-      formatted_data[[i]] <- data.frame(
-        ColorCode = color_names[i],
-        Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px; '></div>", colors[i]),
-        Values = "No matching indices found.",
-        ExperimentalCondition = "-",
-        Time = "-"
+      formatted_data[[i]] <- setNames(
+        data.frame(
+          ColorCode = color_names[i],
+          Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px;'></div>", colors[i]),
+          Values = "No matching indices found.",
+          "-", "-"
+        ),
+        c("ColorCode", "Color", "Values", value1, value2)
       )
     }
   }
   return(do.call(rbind, formatted_data))
 }
+
+
 
 
   

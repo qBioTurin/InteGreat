@@ -1265,7 +1265,7 @@ server <- function(input, output, session) {
     data = NULL,
     TablePlot = NULL,
     dataFinal = NULL,
-    ELISAcell_EXP = NULL,
+    ELISAcell_EXP = "",
     ELISAcell_SN = NULL,
     ELISAcell_COLOR = NULL,
     MapBaseline = NULL,
@@ -1278,7 +1278,7 @@ server <- function(input, output, session) {
     data = NULL,
     TablePlot = NULL,
     dataFinal = NULL,
-    ELISAcell_EXP = NULL,
+    ELISAcell_EXP = "",
     ELISAcell_SN = NULL,
     ELISAcell_COLOR = NULL,
     MapBaseline = NULL,
@@ -1346,8 +1346,9 @@ server <- function(input, output, session) {
     } else {
       elisaResult$Initdata = mess$x
       FlagsELISA$EXPcol = mess$fill
-      elisaResult$ELISAcell_SN = mess$SNtable
-    
+      elisaResult$ELISAcell_COLOR = mess$SNtable
+      elisaResult$ELISAcell_SN = matrix("", nrow = nrow(elisaResult$ELISAcell_COLOR), ncol = ncol(elisaResult$ELISAcell_COLOR))
+      
       removeModal()
       showAlert("Success", "The Excel has been uploaded  with success", "success", 2000)
     }
@@ -1361,6 +1362,254 @@ server <- function(input, output, session) {
                         type = "Initialize")
     }
   })
+  
+  observeEvent(elisaResult$TablePlot, {
+    if (!is.null(elisaResult$TablePlot)) {
+      ELISAtb <- elisaResult$TablePlot
+      output$ELISAmatrix <- renderDT(ELISAtb, server = FALSE)
+      
+      if (!is.null(elisaResult$ENDOCcell_EXP) && !is.null(elisaResult$ENDOCcell_COLOR)) {
+        matTime <- as.matrix(elisaResult$ENDOCcell_EXP)
+        matExp <- as.matrix(elisaResult$ENDOCcell_COLOR)
+        
+        if (!(all(matTime == "") || all(matExp == ""))) {
+          mat <- as.matrix(elisaResult$Initdata)
+          elisaV <- expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
+            rowwise() %>%
+            mutate(values = mat[Var1, Var2])
+          elisaT <- expand.grid(seq_len(nrow(matTime)), seq_len(ncol(matTime))) %>%
+            rowwise() %>%
+            mutate(time = matTime[Var1, Var2])
+          elisaE <- expand.grid(seq_len(nrow(matExp)), seq_len(ncol(matExp))) %>%
+            rowwise() %>%
+            mutate(exp = matExp[Var1, Var2])
+          elisaTot <- merge(elisaV, merge(elisaT, elisaE)) %>%
+            na.omit() %>%
+            filter(time != "", exp != "")
+          
+          elisaResult$data <- elisaTot
+          
+          output$ELISAinitplots <- renderPlot({
+            ggplot(elisaTot, aes(x = time, y = values, col = exp), alpha = 1.4) +
+              geom_point(aes(group = exp)) +
+              scale_color_manual(values = FlagsELISA$EXPcol) +
+              theme_bw() +
+              labs(x = "Times", y = "Values", col = "Exp", fill = "Exp") +
+              theme(legend.position = c(0, 1),
+                    legend.justification = c(0, 1),
+                    legend.direction = "vertical",
+                    legend.background = element_rect(linewidth = 0.5,
+                                                     linetype = "solid",
+                                                     colour = "black"))
+          })
+        }
+      }
+    } 
+  })
+  
+  observe({
+    color_codes <- FlagsELISA$EXPcol
+    color_names <- names(FlagsELISA$EXPcol)
+    
+    valid_colors <- color_codes != "white"
+    color_codes <- color_codes[valid_colors]
+    color_names <- color_names[valid_colors]
+    
+    mid_point <- ceiling(length(color_codes) / 2)
+    left_colors <- color_codes[1:mid_point]
+    right_colors <- color_codes[(mid_point+1):length(color_codes)]
+
+    left_formatted_data <- get_formatted_data(left_colors, color_names[1:mid_point], elisaResult, elisaResult$ELISAcell_EXP,"ELISA")
+    right_formatted_data <- get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)], elisaResult, elisaResult$ELISAcell_EXP, "ELISA")
+    
+    left_data_elisa(left_formatted_data)
+    right_data_elisa(right_formatted_data)
+
+    output$leftTableElisa <- renderDataTable(
+      left_data_elisa(), 
+      escape = FALSE, 
+      editable = list(target = "cell", disable = list(columns = 0:3)),
+      options = list(
+        dom = 't',
+        paging = FALSE,
+        info = FALSE,
+        searching = FALSE, 
+        columnDefs = list(
+          list(targets = 0, visible = FALSE),
+          list(targets = 1, visible = FALSE),
+          list(width = '10px', targets = 2),
+          list(width = '200px', targets = 3),
+          list(width = '80px', targets = 4),
+          list(width = '100px', targets = 5),
+          list(className = 'dt-head-left dt-body-left', targets = 1)
+        )
+      )
+    )
+    
+    output$rightTableElisa <- renderDataTable(
+      right_data_elisa(), 
+      escape = FALSE, 
+      editable = list(target = "cell", disable = list(columns = 0:3)),
+      options = list(
+        dom = 't',
+        paging = FALSE,
+        info = FALSE,
+        searching = FALSE,
+        editable = TRUE,
+        columnDefs = list(
+          list(targets = 0, visible = FALSE),
+          list(targets = 1, visible = FALSE),
+          list(width = '10px', targets = 2),
+          list(width = '200px', targets = 3),
+          list(width = '80px', targets = 4),
+          list(width = '100px', targets = 5),
+          list(className = 'dt-head-left dt-body-left', targets = 1)
+        )
+      )
+    )
+  })
+  
+  observeEvent(input$leftTableElisa_cell_edit, {
+    info <- input$leftTableElisa_cell_edit
+    req(info)  
+    
+    data <- left_data_elisa() 
+    selected_row <- info$row
+    selected_col <- info$col
+    new_value <- info$value
+    
+    if (selected_col == 4) {  
+      color_code <- data[selected_row, "ColorCode"]
+      if (!is.na(color_code) && color_code != "" && color_code != "white" && color_code != "#FFFFFF") {
+        matchingIndices <- which(elisaResult$ELISAcell_COLOR == color_code, arr.ind = TRUE)
+        
+        if (nrow(matchingIndices) > 0) {
+          currentValues <- c()
+          
+          apply(matchingIndices, 1, function(idx) {
+            currentValues <<- c(currentValues, elisaResult$Initdata[idx["row"], idx["col"]])
+            old_value_key <- names(FlagsELISA$EXPcol)[names(FlagsELISA$EXPcol) == elisaResult$ELISAcell_COLOR[idx["row"], idx["col"]]]
+            
+            if (length(old_value_key) > 0) {
+              FlagsELISA$EXPcol[new_value] <- FlagsELISA$EXPcol[old_value_key]
+              FlagsELISA$EXPcol <- FlagsELISA$EXPcol[!names(FlagsELISA$EXPcol) %in% old_value_key]
+            }
+
+            elisaResult$ELISAcell_COLOR[idx["row"], idx["col"]] <- new_value
+            elisaResult$ELISAcell_SN[idx["row"], idx["col"]] <- new_value
+          })
+          
+          if (!new_value %in% FlagsELISA$AllExp) {
+            FlagsELISA$AllExp <- unique(c(FlagsELISA$AllExp, new_value))
+          }
+          
+          tableExcelColored(session = session,
+                            Result = elisaResult, 
+                            FlagsExp = FlagsELISA,
+                            type = "Update")
+          
+          output$ELISASelectedValues <- renderText(paste("Updated values", paste(currentValues, collapse = " - "), ": sample name ", new_value))
+          output$ELISAmatrix <-renderDataTable({elisaResult$TablePlot})
+        }
+      }
+    } else if (selected_col == 5) {
+      color_code <- data[selected_row, "ColorCode"]
+      req(color_code != "", color_code != "white", color_code != "#FFFFFF")
+      
+      matchingIndices <- which(elisaResult$ELISAcell_COLOR == color_code, arr.ind = TRUE)
+      numMatches <- nrow(matchingIndices)
+      
+      new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
+      
+      if (length(new_values) != numMatches || grepl("--", new_value)) {
+        session$sendCustomMessage(type = "errorNotification", 
+                                  message = "Number of values does not match the number of matches or format error.")
+      } else {
+        for (i in seq_along(matchingIndices[, "row"])) {
+          elisaResult$ELISAcell_EXP[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
+        }
+        
+        tableExcelColored(session = session,
+                          Result = elisaResult, 
+                          FlagsExp = FlagsELISA,
+                          type = "Update")
+        
+        output$ELISASelectedValues <- renderText(paste("Updated values for experimental conditions:", paste(new_values, collapse = " - ")))
+        output$ELISAmatrix <- renderDataTable({elisaResult$TablePlot})
+      }
+    }
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  observeEvent(input$rightTableElisa_cell_edit, {
+    info <- input$rightTableElisa_cell_edit
+    req(info)  
+    
+    data <- right_data_elisa() 
+    selected_row <- info$row
+    selected_col <- info$col
+    new_value <- info$value
+    
+    if (selected_col == 4) {  
+      color_code <- data[selected_row, "ColorCode"]
+      if (!is.na(color_code) && color_code != "" && color_code != "white" && color_code != "#FFFFFF") {
+        matchingIndices <- which(elisaResult$ELISAcell_COLOR == color_code, arr.ind = TRUE)
+        
+        if (nrow(matchingIndices) > 0) {
+          currentValues <- c()
+          
+          apply(matchingIndices, 1, function(idx) {
+            currentValues <<- c(currentValues, elisaResult$Initdata[idx["row"], idx["col"]])
+            old_value_key <- names(FlagsELISA$EXPcol)[names(FlagsELISA$EXPcol) == elisaResult$ELISAcell_COLOR[idx["row"], idx["col"]]]
+            
+            if (length(old_value_key) > 0) {
+              FlagsELISA$EXPcol[new_value] <- FlagsELISA$EXPcol[old_value_key]
+              FlagsELISA$EXPcol <- FlagsELISA$EXPcol[!names(FlagsELISA$EXPcol) %in% old_value_key]
+            }
+            
+            elisaResult$ELISAcell_COLOR[idx["row"], idx["col"]] <- new_value
+            elisaResult$ELISAcell_SN[idx["row"], idx["col"]] <- new_value
+          })
+          
+          if (!new_value %in% FlagsELISA$AllExp) {
+            FlagsELISA$AllExp <- unique(c(FlagsELISA$AllExp, new_value))
+          }
+          
+          tableExcelColored(session = session,
+                            Result = elisaResult, 
+                            FlagsExp = FlagsELISA,
+                            type = "Update")
+          
+          output$ELISASelectedValues <- renderText(paste("Updated values", paste(currentValues, collapse = " - "), ": sample name ", new_value))
+          output$ELISAmatrix <-renderDataTable({elisaResult$TablePlot})
+        }
+      }
+    } else if (selected_col == 5) {
+      color_code <- data[selected_row, "ColorCode"]
+      req(color_code != "", color_code != "white", color_code != "#FFFFFF")
+      
+      matchingIndices <- which(elisaResult$ELISAcell_COLOR == color_code, arr.ind = TRUE)
+      numMatches <- nrow(matchingIndices)
+      
+      new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
+      
+      if (length(new_values) != numMatches || grepl("--", new_value)) {
+        session$sendCustomMessage(type = "errorNotification", 
+                                  message = "Number of values does not match the number of matches or format error.")
+      } else {
+        for (i in seq_along(matchingIndices[, "row"])) {
+          elisaResult$ELISAcell_EXP[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
+        }
+        
+        tableExcelColored(session = session,
+                          Result = elisaResult, 
+                          FlagsExp = FlagsELISA,
+                          type = "Update")
+        
+        output$ELISASelectedValues <- renderText(paste("Updated values for experimental conditions:", paste(new_values, collapse = " - ")))
+        output$ELISAmatrix <- renderDataTable({elisaResult$TablePlot})
+      }
+    }
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   #### ENDOCYTOSIS analysis ####
   observeEvent(input$NextEndocQuantif,{
@@ -1459,6 +1708,7 @@ server <- function(input, output, session) {
         endocResult$Initdata = mess$x
         FlagsENDOC$EXPcol = mess$fill
         endocResult$ENDOCcell_COLOR = mess$SNtable
+        endocResult$ENDOCcell_EXP <- matrix("", nrow = nrow(endocResult$ENDOCcell_COLOR), ncol = ncol(endocResult$ENDOCcell_COLOR))
         
         removeModal()
         showAlert("Success", "The Excel has been uploaded  with success", "success", 2000)
@@ -1486,8 +1736,8 @@ server <- function(input, output, session) {
     left_colors <- color_codes[1:mid_point]
     right_colors <- color_codes[(mid_point+1):length(color_codes)]
     
-    left_formatted_data <- get_formatted_data(left_colors, color_names[1:mid_point], endocResult, endocResult$ENDOCcell_EXP, endocResult$ENDOCcell_TIME,"ENDOC")
-    right_formatted_data <- get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)], endocResult, endocResult$ENDOCcell_EXP, endocResult$ENDOCcell_TIME, "ENDOC")
+    left_formatted_data <- get_formatted_data(left_colors, color_names[1:mid_point], endocResult, endocResult$ENDOCcell_TIME,"ENDOC")
+    right_formatted_data <- get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)], endocResult, endocResult$ENDOCcell_TIME, "ENDOC")
   
     left_data_endoc(left_formatted_data)
     right_data_endoc(right_formatted_data)
