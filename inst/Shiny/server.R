@@ -2643,9 +2643,17 @@ server <- function(input, output, session) {
     }
     
     output$FACSresult <- renderDT({
-      datatable(facsResult$data, options = list(autoWidth = TRUE, columnDefs = list(list(visible = FALSE, targets = 0))))
+      datatable(facsResult$data, 
+        options = list(
+          autoWidth = TRUE,
+          #editable = TRUE,
+          columnDefs = list(
+            list(visible = FALSE, targets = 0)  
+          )
+        ),
+        #editable = list(target = "cell", disable = list(2:ncol(facsResult$data)))
+      )
     })
-    
   })
   
   ### End FACS analysis ####
