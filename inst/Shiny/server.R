@@ -1519,14 +1519,21 @@ server <- function(input, output, session) {
       matchingIndices <- which(elisaResult$ELISAcell_COLOR == color_code, arr.ind = TRUE)
       numMatches <- nrow(matchingIndices)
       
-      new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
+      processed_value <- gsub(" -  - ", " - NA - ", new_value)
+      processed_value <- sub("^ - ", "NA - ", processed_value)
+      processed_value <- sub(" - $", " - NA", processed_value)
       
-      if (length(new_values) != numMatches || grepl("--", new_value)) {
+      new_values <- strsplit(processed_value, " - ", fixed = TRUE)[[1]]
+      new_values[new_values == ""] <- NA  
+      
+      if (length(new_values) != numMatches) {
         session$sendCustomMessage(type = "errorNotification", 
-                                  message = "Number of values does not match the number of matches or format error.")
+                                  message = "Number of values does not match the number of matches.")
       } else {
         for (i in seq_along(matchingIndices[, "row"])) {
-          elisaResult$ELISAcell_EXP[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
+          if (!is.na(new_values[i]) && new_values[i] != "" && new_values[i] != "NA") { 
+            elisaResult$ELISAcell_EXP[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
+          } 
         }
         
         tableExcelColored(session = session,
@@ -1534,7 +1541,9 @@ server <- function(input, output, session) {
                           FlagsExp = FlagsELISA,
                           type = "Update")
         
-        output$ELISASelectedValues <- renderText(paste("Updated values for experimental conditions:", paste(new_values, collapse = " - ")))
+        valid_values <- new_values[!is.na(new_values) & new_values != "" & new_values != "NA"]
+        final_values_string <- paste(valid_values, collapse = " - ")
+        output$ELISASelectedValues <- renderText(paste("Updated values for experimental conditions:", final_values_string))
         output$ELISAmatrix <- renderDataTable({elisaResult$TablePlot})
       }
     }
@@ -1590,14 +1599,75 @@ server <- function(input, output, session) {
       matchingIndices <- which(elisaResult$ELISAcell_COLOR == color_code, arr.ind = TRUE)
       numMatches <- nrow(matchingIndices)
       
-      new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
+      processed_value <- gsub(" -  - ", " - NA - ", new_value)
+      processed_value <- sub("^ - ", "NA - ", processed_value)
+      processed_value <- sub(" - $", " - NA", processed_value)
       
-      if (length(new_values) != numMatches || grepl("--", new_value)) {
+      new_values <- strsplit(processed_value, " - ", fixed = TRUE)[[1]]
+      new_values[new_values == ""] <- NA  
+      
+      if (length(new_values) != numMatches) {
         session$sendCustomMessage(type = "errorNotification", 
-                                  message = "Number of values does not match the number of matches or format error.")
+                                  message = "Number of values does not match the number of matches.")
       } else {
         for (i in seq_along(matchingIndices[, "row"])) {
-          elisaResult$ELISAcell_EXP[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
+          if (!is.na(new_values[i]) && new_values[i] != "" && new_values[i] != "NA") { 
+            elisaResult$ELISAcell_EXP[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
+          } 
+        }
+        print(elisaResult$ELISAcell_EXP)
+        tableExcelColored(session = session,
+                          Result = elisaResult, 
+                          FlagsExp = FlagsELISA,
+                          type = "Update")
+        
+        valid_values <- new_values[!is.na(new_values) & new_values != "" & new_values != "NA"]
+        final_values_string <- paste(valid_values, collapse = " - ")
+        output$ELISASelectedValues <- renderText(paste("Updated values for experimental conditions:", final_values_string))
+        output$ELISAmatrix <- renderDataTable({elisaResult$TablePlot})
+      }
+    }
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  observeEvent(input$ELISAmatrix_cell_clicked, {
+    req(input$ELISAmatrix_cell_clicked)  
+    
+    cellSelected = as.numeric(input$ELISAmatrix_cell_clicked)
+    FlagsELISA$cellCoo = cellCoo = c(cellSelected[1], cellSelected[2] + 1)
+    
+    allExp <- unique(na.omit(c(elisaResult$ELISAcell_EXP)))  
+    selectedExp <- ifelse(is.null(elisaResult$ELISAcell_EXP[cellCoo[1], cellCoo[2]]), "", elisaResult$ELISAcell_EXP[cellCoo[1], cellCoo[2]])
+    
+    updateSelectizeInput(inputId = "ELISAcell_EXP", 
+                         choices = allExp,
+                         selected = selectedExp)
+    
+    allSN <- unique(na.omit(c(elisaResult$ELISAcell_SN)))  
+    selectedSN <- ifelse(is.null(elisaResult$ELISAcell_SN[cellCoo[1], cellCoo[2]]), "", elisaResult$ELISAcell_SN[cellCoo[1], cellCoo[2]])
+    
+    updateSelectizeInput(inputId = "ELISAcell_SN",
+                         choices = allSN,
+                         selected = selectedSN)
+  })
+  
+  observeEvent(input$ELISAcell_SN, {
+    if (!is.null(elisaResult$ELISAcell_COLOR) && !is.null(FlagsELISA$cellCoo) && !anyNA(FlagsELISA$cellCoo)) {
+      ELISAtb = elisaResult$TablePlot
+      cellCoo = FlagsELISA$cellCoo
+      
+      value.bef = elisaResult$ELISAcell_COLOR[cellCoo[1], cellCoo[2]] 
+      value.now = input$ELISAcell_SN
+      
+      if (value.now != "" && value.now != value.bef) {
+        currentValues <- elisaResult$Initdata[cellCoo[1], cellCoo[2]]
+        
+        elisaResult$ELISAcell_COLOR[cellCoo[1], cellCoo[2]] = value.now
+        elisaResult$ELISAcell_SN[cellCoo[1], cellCoo[2]] = value.now
+        ELISAtb$x$data[cellCoo[1], paste0("Col", cellCoo[2])] = value.now
+        
+        if (!input$ELISAcell_SN %in% FlagsELISA$AllExp) {
+          exp = unique(c(FlagsELISA$AllExp, input$ELISAcell_SN))
+          FlagsELISA$AllExp = exp
         }
         
         tableExcelColored(session = session,
@@ -1605,11 +1675,37 @@ server <- function(input, output, session) {
                           FlagsExp = FlagsELISA,
                           type = "Update")
         
-        output$ELISASelectedValues <- renderText(paste("Updated values for experimental conditions:", paste(new_values, collapse = " - ")))
+        output$ELISASelectedValues <- renderText(paste("Updated value", paste(currentValues), ": sample name ", value.now))
         output$ELISAmatrix <- renderDataTable({elisaResult$TablePlot})
       }
-    }
-  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    } else return()
+  }, ignoreInit = TRUE)
+  
+  observeEvent(input$ELISAcell_EXP, {
+    if (!is.null(elisaResult$ELISAcell_EXP) && !is.null(FlagsELISA$cellCoo) && !anyNA(FlagsELISA$cellCoo)) {
+      ELISAtb = elisaResult$TablePlot
+      cellCoo = FlagsELISA$cellCoo
+      
+      value.bef = elisaResult$ELISAcell_EXP[cellCoo[1], cellCoo[2]] 
+      value.now = input$ELISAcell_EXP
+      
+      if (value.now != "" && value.now != value.bef) {
+        currentValues <- elisaResult$Initdata[cellCoo[1], cellCoo[2]]
+        
+        elisaResult$ELISAcell_EXP[cellCoo[1], cellCoo[2]] = value.now
+        tableExcelColored(session = session,
+                          Result = elisaResult, 
+                          FlagsExp = FlagsELISA,
+                          type = "Update",
+        )
+        
+        output$ELISASelectedValues <- renderText(paste("Updated value", paste(currentValues), ": time ", value.now))
+        output$ELISAmatrix <- renderDataTable({elisaResult$TablePlot})
+      }
+    } else return()
+  }, ignoreInit = TRUE)
+  
+  ### END ELISA ###
   
   #### ENDOCYTOSIS analysis ####
   observeEvent(input$NextEndocQuantif,{
@@ -1786,7 +1882,6 @@ server <- function(input, output, session) {
     )
   })
 
-  
   observeEvent(input$leftTableEndoc_cell_edit, {
     info <- input$leftTableEndoc_cell_edit
     req(info)  
@@ -1836,14 +1931,21 @@ server <- function(input, output, session) {
       matchingIndices <- which(endocResult$ENDOCcell_COLOR == color_code, arr.ind = TRUE)
       numMatches <- nrow(matchingIndices)
       
-      new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
+      processed_value <- gsub(" -  - ", " - NA - ", new_value)
+      processed_value <- sub("^ - ", "NA - ", processed_value)
+      processed_value <- sub(" - $", " - NA", processed_value)
       
-      if (length(new_values) != numMatches || grepl("--", new_value)) {
+      new_values <- strsplit(processed_value, " - ", fixed = TRUE)[[1]]
+      new_values[new_values == ""] <- NA  
+      
+      if (length(new_values) != numMatches) {
         session$sendCustomMessage(type = "errorNotification", 
-                                  message = "Number of values does not match the number of matches or format error.")
+                                  message = "Number of values does not match the number of matches.")
       } else {
         for (i in seq_along(matchingIndices[, "row"])) {
-          endocResult$ENDOCcell_TIME[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
+          if (!is.na(new_values[i]) && new_values[i] != "" && new_values[i] != "NA") { 
+            endocResult$ENDOCcell_TIME[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
+          } 
         }
         
         tableExcelColored(session = session,
@@ -1851,12 +1953,13 @@ server <- function(input, output, session) {
                           FlagsExp = FlagsENDOC,
                           type = "Update")
         
-        output$ENDOCSelectedValues <- renderText(paste("Updated values for experimental conditions:", paste(new_values, collapse = " - ")))
+        valid_values <- new_values[!is.na(new_values) & new_values != "" & new_values != "NA"]
+        final_values_string <- paste(valid_values, collapse = " - ")
+        output$ENDOCSelectedValues <- renderText(paste("Updated values for experimental conditions:", final_values_string))
         output$ENDOCmatrix <- renderDataTable({endocResult$TablePlot})
       }
     }
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
-  
   
   observeEvent(input$rightTableEndoc_cell_edit, {
     info <- input$rightTableEndoc_cell_edit
@@ -1903,27 +2006,36 @@ server <- function(input, output, session) {
     } else if (selected_col == 5) {
       color_code <- data[selected_row, "ColorCode"]
       req(color_code != "", color_code != "white", color_code != "#FFFFFF")
-      
+  
       matchingIndices <- which(endocResult$ENDOCcell_COLOR == color_code, arr.ind = TRUE)
       numMatches <- nrow(matchingIndices)
+  
+      processed_value <- gsub(" -  - ", " - NA - ", new_value)
+      processed_value <- sub("^ - ", "NA - ", processed_value)
+      processed_value <- sub(" - $", " - NA", processed_value)
+  
+      new_values <- strsplit(processed_value, " - ", fixed = TRUE)[[1]]
+      new_values[new_values == ""] <- NA  
       
-      new_values <- strsplit(new_value, " - ", fixed = TRUE)[[1]]
-      
-      if (length(new_values) != numMatches || grepl("--", new_value)) {
-        session$sendCustomMessage(type = "errorNotification", 
-                                  message = "Number of values does not match the number of matches or format error.")
+      if (length(new_values) != numMatches) {
+          session$sendCustomMessage(type = "errorNotification", 
+                                    message = "Number of values does not match the number of matches.")
       } else {
-        for (i in seq_along(matchingIndices[, "row"])) {
-          endocResult$ENDOCcell_TIME[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
-        }
+          for (i in seq_along(matchingIndices[, "row"])) {
+            if (!is.na(new_values[i]) && new_values[i] != "" && new_values[i] != "NA") { 
+              endocResult$ENDOCcell_TIME[matchingIndices[i, "row"], matchingIndices[i, "col"]] <- new_values[i]
+            } 
+          }
         
-        tableExcelColored(session = session,
-                          Result = endocResult, 
-                          FlagsExp = FlagsENDOC,
-                          type = "Update")
-        
-        output$ENDOCSelectedValues <- renderText(paste("Updated values for experimental conditions:", paste(new_values, collapse = " - ")))
-        output$ENDOCmatrix <- renderDataTable({endocResult$TablePlot})
+          tableExcelColored(session = session,
+                            Result = endocResult, 
+                            FlagsExp = FlagsENDOC,
+                            type = "Update")
+          
+          valid_values <- new_values[!is.na(new_values) & new_values != "" & new_values != "NA"]
+          final_values_string <- paste(valid_values, collapse = " - ")
+          output$ENDOCSelectedValues <- renderText(paste("Updated values for experimental conditions:", final_values_string))
+          output$ENDOCmatrix <- renderDataTable({endocResult$TablePlot})
       }
     }
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
