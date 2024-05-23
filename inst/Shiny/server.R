@@ -1363,48 +1363,31 @@ server <- function(input, output, session) {
     }
   })
   
-  observeEvent(elisaResult$TablePlot, {
-    if (!is.null(elisaResult$TablePlot)) {
-      ELISAtb <- elisaResult$TablePlot
-      output$ELISAmatrix <- renderDT(ELISAtb, server = FALSE)
-      
-      if (!is.null(elisaResult$ENDOCcell_EXP) && !is.null(elisaResult$ENDOCcell_COLOR)) {
-        matTime <- as.matrix(elisaResult$ENDOCcell_EXP)
-        matExp <- as.matrix(elisaResult$ENDOCcell_COLOR)
-        
-        if (!(all(matTime == "") || all(matExp == ""))) {
-          mat <- as.matrix(elisaResult$Initdata)
-          elisaV <- expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
-            rowwise() %>%
-            mutate(values = mat[Var1, Var2])
-          elisaT <- expand.grid(seq_len(nrow(matTime)), seq_len(ncol(matTime))) %>%
-            rowwise() %>%
-            mutate(time = matTime[Var1, Var2])
-          elisaE <- expand.grid(seq_len(nrow(matExp)), seq_len(ncol(matExp))) %>%
-            rowwise() %>%
-            mutate(exp = matExp[Var1, Var2])
-          elisaTot <- merge(elisaV, merge(elisaT, elisaE)) %>%
-            na.omit() %>%
-            filter(time != "", exp != "")
-          
-          elisaResult$data <- elisaTot
-          
-          output$ELISAinitplots <- renderPlot({
-            ggplot(elisaTot, aes(x = time, y = values, col = exp), alpha = 1.4) +
-              geom_point(aes(group = exp)) +
-              scale_color_manual(values = FlagsELISA$EXPcol) +
-              theme_bw() +
-              labs(x = "Times", y = "Values", col = "Exp", fill = "Exp") +
-              theme(legend.position = c(0, 1),
-                    legend.justification = c(0, 1),
-                    legend.direction = "vertical",
-                    legend.background = element_rect(linewidth = 0.5,
-                                                     linetype = "solid",
-                                                     colour = "black"))
-          })
-        }
-      }
-    } 
+  observeEvent(c(elisaResult$TablePlot,elisaResult$ELISAcell_EXP), {
+    ELISAtb = elisaResult$TablePlot
+    output$ELISAmatrix <-renderDataTable({ELISAtb})
+                 
+    ##### Plot the values selected!
+    matTime =  as.matrix(elisaResult$ELISAcell_EXP)
+    matExp =  as.matrix(elisaResult$ELISAcell_SN)
+               
+    if( !( all(matTime == "")  || all(matExp == "") ) ){
+      mat = as.matrix(elisaResult$Initdata)
+      elisaV = expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
+      rowwise() %>%
+      mutate(values = mat[Var1, Var2])
+      elisaT = expand.grid(seq_len(nrow(matTime)), seq_len(ncol(matTime))) %>%
+      rowwise() %>%
+      mutate(time = matTime[Var1, Var2])
+      elisaE = expand.grid(seq_len(nrow(matExp)), seq_len(ncol(matExp))) %>%
+      rowwise() %>%
+      mutate(exp = matExp[Var1, Var2])
+      elisaTot = merge(elisaV,merge(elisaT,elisaE)) %>%
+      na.omit() %>%
+      filter(time != "",  exp != "") 
+               
+      elisaResult$data = elisaTot
+    }
   })
   
   observe({
@@ -1705,8 +1688,414 @@ server <- function(input, output, session) {
     } else return()
   }, ignoreInit = TRUE)
   
-  ### END ELISA ###
+  ## update Baselines checkBox
+  observeEvent(c(FlagsELISA$AllExp,FlagsELISA$BASEselected,FlagsELISA$BLANCHEselected),{
+    if(length(FlagsELISA$AllExp) > 1){
+      exp = FlagsELISA$AllExp
+      exp = exp[exp != ""]
+      
+      bool.tmp = exp %in% unique(c(FlagsELISA$BLANCHEselected,FlagsELISA$BASEselected))
+      if( length(bool.tmp) > 0  )
+        exp = exp[!bool.tmp]
+      
+      updateSelectizeInput(session,"ELISA_standcurve",
+                           choices = exp,
+                           selected = ifelse(FlagsELISA$STDCselected %in% exp,FlagsELISA$STDCselected,"") 
+      )
+    }
+  })
+  observeEvent(c(FlagsELISA$AllExp,FlagsELISA$BASEselected,FlagsELISA$STDCselected),{
+    if(length(FlagsELISA$AllExp) > 1){
+      exp = FlagsELISA$AllExp
+      exp = exp[exp != ""]
+      
+      bool.tmp = exp %in% unique(c(FlagsELISA$STDCselected,FlagsELISA$BASEselected))
+      if( length(bool.tmp) > 0  )
+        exp = exp[!bool.tmp]
+      
+      updateCheckboxGroupInput(session,"ELISA_blanks",
+                               choices = exp,
+                               selected = FlagsELISA$BLANCHEselected )
+    }
+  })
+  observeEvent(c(FlagsELISA$AllExp,FlagsELISA$BLANCHEselected,FlagsELISA$STDCselected),{
+    if(length(FlagsELISA$AllExp) > 1){
+      exp = FlagsELISA$AllExp
+      exp = exp[exp != ""]
+      
+      bool.tmp = exp %in% unique(c(FlagsELISA$STDCselected,FlagsELISA$BLANCHEselected))
+      if( length(bool.tmp) > 0  )
+        exp = exp[!bool.tmp]
+      
+      exp_selec = input$ELISA_baselines
+      
+      updateCheckboxGroupInput(session,"ELISA_baselines",
+                               choices = exp,
+                               selected = FlagsELISA$BASEselected )
+    }
+  })
   
+  ## select the baselines, std curves, and blank
+  observeEvent(input$ELISA_baselines,{
+    FlagsELISA$BASEselected = input$ELISA_baselines
+    FlagsELISA$EXPselected = FlagsELISA$AllExp[! FlagsELISA$AllExp %in% c(FlagsELISA$STDCselected,FlagsELISA$BASEselected,FlagsELISA$BLANCHEselected)]
+  },ignoreNULL = F)
+  observeEvent(input$ELISA_standcurve,{
+    FlagsELISA$STDCselected = input$ELISA_standcurve
+    FlagsELISA$EXPselected = FlagsELISA$AllExp[! FlagsELISA$AllExp %in% c(FlagsELISA$STDCselected,FlagsELISA$BASEselected,FlagsELISA$BLANCHEselected)]
+  },ignoreNULL = F)
+  observeEvent(input$ELISA_blanks,{
+    FlagsELISA$BLANCHEselected = input$ELISA_blanks
+    FlagsELISA$EXPselected = FlagsELISA$AllExp[! FlagsELISA$AllExp %in% c(FlagsELISA$STDCselected,FlagsELISA$BASEselected,FlagsELISA$BLANCHEselected)]
+  },ignoreNULL = F)
+  
+  toListen_elisa <- reactive({
+    exp = FlagsELISA$EXPselected
+    exp = exp[exp != ""]
+    if(length(exp) > 0 )
+    {
+      Input_baselEXP = lapply(exp,
+                              function(i) input[[paste0("elisa_Exp",i)]])
+      Input_blEXP = lapply(unique(exp,FlagsELISA$BASELINEselected),
+                           function(i) input[[paste0("elisa_blExp",i)]] )
+      InputEXP = c(Input_baselEXP,Input_blEXP)
+      
+      which(sapply(InputEXP, function(x) 
+        ifelse(is.null(x), T, ifelse(x == "", T, F) ) ) ) -> indexesEXPnull
+      
+      if(length(indexesEXPnull) > 0 )
+        listReturn = InputEXP[-indexesEXPnull]
+      else
+        listReturn = InputEXP
+    }else{
+      listReturn = list()
+    }
+    
+    if(length(listReturn) == 0){
+      return(list("Nothing",elisaResult$ELISAcell_EXP,elisaResult$ELISAcell_SN))
+    }else{
+      return(c(listReturn,list(elisaResult$ELISAcell_EXP,elisaResult$ELISAcell_SN)) )
+    }
+  })
+  
+  observeEvent(toListen_elisa(),{
+    baselines = FlagsELISA$BASEselected
+    baselines = baselines[baselines != ""]
+    
+    if(toListen_elisa()[[1]] != "Nothing" ){
+      exp = FlagsELISA$EXPselected
+      exp = exp[exp != ""]
+      expNotBlank = unique(c(exp,baselines))
+      
+      MapBaseline = do.call(rbind,
+                            lapply(exp,function(i){
+                              if( length(input[[paste0("elisa_Exp",i)]]) > 0 && input[[paste0("elisa_Exp",i)]] != ""){
+                                data.frame(Exp = i, Baseline = input[[paste0("elisa_Exp",i)]])
+                              }else{
+                                data.frame(Exp = i, Baseline = NA)
+                              }
+                            })
+      ) %>% na.omit()
+      
+      MapBlank = do.call(rbind,
+                         lapply(expNotBlank,
+                                function(i){
+                                  if( length(input[[paste0("elisa_blExp",i)]]) > 0 && input[[paste0("elisa_blExp",i)]] != ""){
+                                    data.frame(Exp = i, Blank = input[[paste0("elisa_blExp",i)]])
+                                  }else{
+                                    data.frame(Exp = i, Blank = NA)
+                                  }
+                                })
+      ) %>% na.omit()
+      
+      elisaResult$MapBaseline = MapBaseline
+      elisaResult$MapBlank = MapBlank
+      
+      mat = as.matrix(elisaResult$Initdata)
+      elisaV = expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
+        rowwise() %>%
+        mutate(values = mat[Var1, Var2])
+      matTime =  as.matrix(elisaResult$ELISAcell_EXP)
+      elisaT = expand.grid(seq_len(nrow(matTime)), seq_len(ncol(matTime))) %>%
+        rowwise() %>%
+        mutate(time = matTime[Var1, Var2])
+      matExp =  as.matrix(elisaResult$ELISAcell_SN)
+      elisaE = expand.grid(seq_len(nrow(matExp)), seq_len(ncol(matExp))) %>%
+        rowwise() %>%
+        mutate(exp = matExp[Var1, Var2])
+      elisaTot = merge(elisaV,merge(elisaT,elisaE)) %>%
+        filter(exp != "")
+      
+      elisaTotAverage = elisaTot %>%
+        #mutate(time = ifelse(exp %in% MapBlank$Blank, 0, time)) %>%
+        group_by(time, exp) %>%
+        summarize(meanValues = mean(values))
+      
+      # merging exp with blank for the substraction
+      
+      elisaTot_bl = right_join( elisaTotAverage,MapBlank, 
+                                by= c("exp"= "Blank") )%>%
+        rename(BlankValues = meanValues, Blank =  exp, exp = Exp )
+      
+      elisaTotAverage = merge( elisaTotAverage %>% filter( exp %in%elisaTot_bl$exp ),
+                               elisaTot_bl %>% ungroup(),all.x = T, by = c("exp","time") ) 
+      elisaTotAverage[is.na(elisaTotAverage[,])] = 0
+      elisaTotAverage = elisaTotAverage %>% mutate(meanValues = meanValues - BlankValues )
+      
+      # merging exp with baseline
+      elisaTot_base = merge(MapBaseline, elisaTotAverage,
+                            by.y = "exp", by.x = "Baseline",all = T) %>%
+        rename(BaseValues = meanValues) %>% select(-Blank,-BlankValues)
+      
+      elisaTot_base = merge(elisaTotAverage, elisaTot_base, 
+                            by.x = c("exp","time"), by.y = c("Exp","time"),
+                            all.x = T  )
+      
+      elisaResult$data = elisaTot
+      
+      if(length(elisaTot_base[,1]) != 0 && !is.null(elisaResult$Regression) ){
+        
+        elisamean = elisaTot_base %>%
+          rename( MeanExperiment = meanValues,
+                  MeanBaseline = BaseValues ) %>%
+          dplyr::mutate(Quantification =  elisaResult$Regression$fun(MeanExperiment) ) %>%
+          #MeanExperiment/MeanBaseline * 100) %>%
+          rename(Experiment = exp,Time = time) 
+        
+        output$ELISAtables = renderDT(elisamean)
+        
+        elisaResult$dataFinal = elisamean
+        
+        output$ELISAplots = renderPlot(
+          {
+            elisamean %>%
+              ggplot( aes(x = Time, y = Quantification,
+                          fill= Experiment, group = Experiment ) )+
+              geom_bar(position = "dodge",stat = "identity")+
+              theme_bw()+
+              labs(x = "Time", col = "Experiments",
+                   y = "Average quantifications obtained\n from the lm ")
+          }
+        )
+      }else{
+        output$ELISAtables = renderDT(data.frame(Error = "No linear model!"))
+      }
+    }
+  })
+  
+  # here the Exp boxes are updated every time a new experiment is added 
+  observeEvent(FlagsELISA$EXPselected,{
+    expToselect = FlagsELISA$EXPselected
+    baselines =  FlagsELISA$BASEselected
+    blanks = FlagsELISA$BLANCHEselected
+    
+    expToselect = expToselect[expToselect != ""]
+    
+    # baselines updating
+    output$ElisaBaselineSelection <- renderUI({
+      select_output_list <- lapply(expToselect[! expToselect %in% baselines],
+                                   function(i) {
+                                     if(length(input[[paste0("elisa_Exp",i)]])>0)
+                                       expsel = input[[paste0("elisa_Exp",i)]]
+                                     else 
+                                       expsel = ""
+                                     
+                                     selectInput(inputId = paste0("elisa_Exp",i),
+                                                 label = i,
+                                                 choices = c("",baselines),
+                                                 selected = expsel)
+                                   })
+      do.call(tagList, select_output_list)
+    })
+    # blanks updating
+    output$ElisaBlankSelection <- renderUI({
+      select_output_list <- lapply(unique(c(expToselect,baselines)), function(i) {
+        
+        if(length(input[[paste0("elisa_blExp",i)]])>0)
+          expsel = input[[paste0("elisa_blExp",i)]]
+        else 
+          expsel = ""
+        
+        selectInput(inputId = paste0("elisa_blExp",i),
+                    label = i,
+                    choices = c("",blanks),
+                    selected = expsel)
+      })
+      do.call(tagList, select_output_list)
+    })
+  })
+
+  observeEvent(input$ELISA_standcurve,{
+    print("sono entrato")
+    print(elisaResult$data)
+    elisaResult$data -> data
+    print(data)
+    if(input$ELISA_standcurve != ""){
+      
+      standcurve = data %>%
+        filter(exp %in% input$ELISA_standcurve) %>%
+        # group_by(exp,time) %>%
+        # summarise(AverageMeasures = mean(values)) %>%
+        # ungroup() %>%
+        select(exp,time,values) %>%
+        rename(Measures = values) %>%
+        mutate(Concentrations = NA )
+      
+      # If nothing changes w..r.t. the already saved table then I keep the old one!
+      if(!is.null(elisaResult$Tablestandcurve) && 
+         all.equal(elisaResult$Tablestandcurve %>% select(-Concentrations),
+                   standcurve  %>% select(-Concentrations) ))
+      {
+        standcurve =  elisaResult$Tablestandcurve
+      }else{
+        elisaResult$Tablestandcurve = standcurve
+      }
+      
+      
+      output$ELISA_Table_stdcurve <- DT::renderDataTable({
+        DT::datatable( standcurve,
+                       selection = 'none',
+                       editable = list(target = "cell",
+                                       disable = list(columns = 0:2) ),
+                       #options = list(lengthChange = FALSE, autoWidth = TRUE),
+                       rownames= FALSE
+        )
+      })
+    } 
+    print("sono uscito")
+  })
+  
+  observeEvent(elisaResult$Tablestandcurve,{
+    if(!is.null(elisaResult$Tablestandcurve) && dim(elisaResult$Tablestandcurve)[1]!=0){
+      
+      output$ELISA_Table_stdcurve <- DT::renderDataTable({
+        DT::datatable( 
+          elisaResult$Tablestandcurve,
+          selection = 'none',
+          editable = list(target = "cell",
+                          disable = list(columns = 0:2) ),
+          #options = list(lengthChange = FALSE, autoWidth = TRUE),
+          rownames= FALSE
+        )
+      })
+    } 
+  })
+  observeEvent(input$ELISA_Table_stdcurve_cell_edit, {
+    cells = input$ELISA_Table_stdcurve_cell_edit
+    cells$col = cells$col + 1
+    elisaResult$Tablestandcurve <- editData( elisaResult$Tablestandcurve ,
+                                             cells,
+                                             'ELISA_Table_stdcurve')
+  })
+  observeEvent(input$ELISA_buttonRegression,{
+    standcurve = elisaResult$Tablestandcurve
+    standcurve$Concentrations = as.numeric(standcurve$Concentrations)
+    if(!is.null(standcurve)){
+      standcurve = standcurve %>% na.omit()
+      
+      
+      regressionPlot = ggplot(standcurve,aes(Concentrations, Measures)) +
+        geom_point() +
+        theme_bw()
+      
+      if(input$regressionType == "Linear"){
+        modelStancurve = lm(Measures~Concentrations, data = standcurve)
+        
+        infoLM = data.frame(x = min(standcurve$Concentrations) + c(1,1),
+                            y = max(standcurve$Measures) + c(2,1.75),
+                            text = c( paste0("y = ", signif(modelStancurve$coef[[2]], 5), "x + ",signif(modelStancurve$coef[[1]],5 )),
+                                      paste0("Adj R2 = ",signif(summary(modelStancurve)$adj.r.squared, 5))) )
+        
+        fun = paste0("(x - ",modelStancurve$coef[[1]],")/", modelStancurve$coef[[2]])
+        
+        regressionPlot =  regressionPlot +
+          geom_smooth(method='lm', col = "red") +
+          geom_text(data= infoLM,
+                    aes(x = x, y = y, label =text ),
+                    vjust = "inward", hjust = "inward" )
+        
+      }
+      else if(input$regressionType == "Quadratic")
+      {
+        #this is not implemented
+        standcurve$Concentrations2 = standcurve$Concentrations^2
+        modelStancurve = lm(Measures~Concentrations+Concentrations2, data = standcurve)
+        
+        infoLM = data.frame(x = min(standcurve$Concentrations) + c(1,1),
+                            y = max(standcurve$Measures) + c(2,1.75),
+                            text = c( paste0("y = ", signif(modelStancurve$coef[[3]], 5), "x^2 + ",
+                                             signif(modelStancurve$coef[[2]], 5), "x + ",signif(modelStancurve$coef[[1]],5 )),
+                                      paste0("Adj R2 = ",signif(summary(modelStancurve)$adj.r.squared, 5))) )
+        
+        fun = paste0(modelStancurve$coef[[3]],"*x^2 + ",modelStancurve$coef[[2]],"*x + ",modelStancurve$coef[[1]] )
+        
+        regressionPlot =  regressionPlot  +
+          geom_point() +
+          stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1,col="red")+
+          geom_text(data= infoLM,
+                    aes(x = x, y = y, label =text ),
+                    vjust = "inward", hjust = "inward" )
+      }
+      else if(input$regressionType == "Hyperbola"){
+        
+        outNLreg = tryCatch(
+          {
+            modelStancurve<-nls(
+              Measures ~ a*Concentrations/(b+Concentrations), 
+              data = standcurve, #%>% group_by(Concentrations) %>% summarise(Measures = mean(Measures)),
+              start = list(a = 1,b = 1)
+            )
+          }, 
+          error = function(e){
+            return(e)
+          })
+        
+        if(!is.null(outNLreg$mess)){
+          modelStancurve = NULL
+          regressionPlot = ggplot()+ geom_text(data = data.frame(x = 1,y =1,text = paste0("Error: ",outNLreg$mess)),
+                                               aes(x,y,label = text),color = "red")
+        }else{
+          modelStancurve = outNLreg
+          coef = modelStancurve$m$getPars()
+          r2 = 1- sum(modelStancurve$m$resid()^2)/(sum(( mean(standcurve$Measures) - modelStancurve$m$predict() )^2))
+          
+          infoLM = data.frame(x = min(standcurve$Concentrations) + c(1,1),
+                              y = max(standcurve$Measures) + c(2,1.75),
+                              text = c( paste0("y = ", signif(coef["a"], 5), "x / ( ",
+                                               signif(coef["b"], 5), " + x ) "),
+                                        paste0("R2 = ",signif(r2, 5))) )
+          
+          dfHyperbola = data.frame(x = seq(min(standcurve$Concentrations),max(standcurve$Concentrations),length.out = 20)) %>%
+            mutate(y = (coef["a"]*x/((coef["b"]+x)) ) )
+          
+          fun = paste0(coef["b"],"*x/(",coef["a"],"-x)")
+          
+          regressionPlot =  regressionPlot  +
+            geom_point() +
+            geom_line(data = dfHyperbola,aes(x = x,y = y),size = 1,col="red" )+
+            geom_text(data= infoLM,
+                      aes(x = x, y = y, label =text ),
+                      vjust = "inward", hjust = "inward" )
+        }
+      }
+      
+      elisaResult$Regression = list(data = modelStancurve, plot = regressionPlot, fun = function(x){ eval( parse(text = fun ) ) } )
+      
+    }else{
+      regressionPlot = ggplot()
+    }
+    output$ELISAregression <- renderPlot(regressionPlot)
+  })
+  
+  # save everytime there is a change in the results
+  # ELISAresultListen <- reactive({
+  #   reactiveValuesToList(elisaResult)
+  # })
+  # observeEvent(ELISAresultListen(), {
+  #   DataAnalysisModule$elisaResult = reactiveValuesToList(elisaResult)
+  # })
+  
+  ### End ELISA analysis ####  
   #### ENDOCYTOSIS analysis ####
   observeEvent(input$NextEndocQuantif,{
     updateTabsetPanel(session, "SideTabs",
