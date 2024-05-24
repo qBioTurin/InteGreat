@@ -5,7 +5,7 @@ Sys.setenv("DATAVERSE_SERVER" = "dataverse.harvard.edu")
 APIkey_path = system.file("Data",".APIkey", package = "ORCA")
 
 #source(system.file("Shiny","AuxFunctions.R", package = "ORCA"))
-source("./inst/Shiny/AuxFunctions.R")
+#source("./inst/Shiny/AuxFunctions.R")
 
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
@@ -1253,7 +1253,7 @@ server <- function(input, output, session) {
   
   #### END PCR analysis ####
   
-  #### ELISA analysis
+  #### ELISA analysis ####
   observeEvent(input$NextElisaQuantif,{
     updateTabsetPanel(session, "SideTabs",
                       selected = "tablesELISA")

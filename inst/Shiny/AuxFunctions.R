@@ -11,6 +11,12 @@ manageSpinner <- function(isDownloading) {
   }
 }
 
+areColors <- function(x) {
+  sapply(x, function(X) {
+    tryCatch(is.matrix(col2rgb(X)), 
+             error = function(e) FALSE)
+  })
+}
 resetPanel <- function(type, flags = NULL, panelStructures = NULL, numberOfPlanes = NULL, planeSelected = NULL, result, output = NULL, panelData = NULL) {
   switch(type,
          "WB" = {
@@ -248,14 +254,20 @@ readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = 
 }
 
 # load the image
-loadImage = function(pathImage){
-  im <- OpenImageR::readImage(pathImage,as.is = T,convert=TRUE)
+LoadImage = function(pathImage){
+  im <- OpenImageR::readImage(pathImage,as.is = T, convert=TRUE)
   
-  if( length(dim(im)) != 2  ) 
+  if( length(dim(im)) != 2 && dim(im)[3] == 4 ){ # if the tiff image is already gray
+    im = im[,,-4]
     im = rgb_2gray(im)
+  }else if( length(dim(im)) != 2 && dim(im)[3] == 3 ){
+    im = rgb_2gray(im)
+  }
+  
   
   JpegImage = tempfile(fileext = "jpeg")
   
+  # unlink()
   jpeg(file=JpegImage,
        width = dim(im)[2],
        height = dim(im)[1],
@@ -434,8 +446,11 @@ tableExcelColored = function(session, output,Result, FlagsExp, type){
         ExpDataTable.colors = matrix("",nrow = nrow(ExpDataTable),ncol=ncol(ExpDataTable))
       }else{
         ExpDataTable.colors = Result[[grep(x=names(Result), pattern = "cell_COLOR", value = T)]]
-        if(is.null(ExpDataTable.colors) || nrow(ExpDataTable.colors) != nrow(ExpDataTable)) {
+        
+        if(is.null(ExpDataTable.colors) ) {
           ExpDataTable.colors = matrix("", nrow = nrow(ExpDataTable), ncol = ncol(ExpDataTable))
+        }else if( nrow(ExpDataTable.colors) != nrow(ExpDataTable) ||  ncol(ExpDataTable.colors) != ncol(ExpDataTable) ){
+          ExpDataTable.colors = ExpDataTable.colors[1:nrow(ExpDataTable),1:ncol(ExpDataTable)]
         }
       }
       
