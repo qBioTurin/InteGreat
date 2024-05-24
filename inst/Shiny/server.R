@@ -1372,7 +1372,7 @@ server <- function(input, output, session) {
         matTime <- as.matrix(elisaResult$ELISAcell_EXP)
         matExp <- as.matrix(elisaResult$ELISAcell_COLOR)
         
-        if (!(all(matTime == "") || all(matExp == ""))) {
+        #if (!(all(matTime == "") || all(matExp == ""))) {
           mat <- as.matrix(elisaResult$Initdata)
           elisaV <- expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
             rowwise() %>%
@@ -1402,7 +1402,7 @@ server <- function(input, output, session) {
                                                      linetype = "solid",
                                                      colour = "black"))
           })
-        }
+        #}
       }
     } 
   })
@@ -1469,114 +1469,20 @@ server <- function(input, output, session) {
     )
   })
   
-  updateTable <- function(position, analysis, info) {
-    req(info)  
-    
-    analysis_lower <- tolower(analysis)
-    data_analysis <- paste(position, "data", analysis_lower, sep = "_")
-    
-    data <- get(data_analysis)()
-    selected_row <- info$row
-    selected_col <- info$col
-    new_value <- info$value
-    
-    if (selected_col == 4) {
-      color_code <- data[selected_row, "ColorCode"]
-      
-      if (!is.na(color_code) && color_code != "" && color_code != "white" && color_code != "#FFFFFF") {
-        analysis_lower <- tolower(analysis)
-        matching_indices <- which(get(paste0(analysis_lower, "Result"))[[paste0(analysis, "cell_COLOR")]] == color_code, arr.ind = TRUE)
-        
-        if (nrow(matching_indices) > 0) {
-          current_values <- c()
-          
-          apply(matching_indices, 1, function(idx) {
-            analysis_result <- get(paste0(analysis_lower, "Result"))
-            current_values <<- c(current_values, analysis_result[[paste0("Initdata")]][idx["row"], idx["col"]])
-            old_value_key <- names(get(paste0("Flags", analysis))[[paste0("EXPcol")]])[names(get(paste0("Flags", analysis))[[paste0("EXPcol")]]) == analysis_result[[paste0(analysis, "cell_COLOR")]][idx["row"], idx["col"]]]
-            
-            if (length(old_value_key) > 0) {
-              flags_analysis <- get(paste0("Flags", analysis))
-              flags_analysis[[paste0("EXPcol")]][new_value] <- flags_analysis[[paste0("EXPcol")]][old_value_key]
-              flags_analysis[[paste0("EXPcol")]] <- flags_analysis[[paste0("EXPcol")]][!names(flags_analysis[[paste0("EXPcol")]]) %in% old_value_key]
-              assign(paste0("Flags", analysis), flags_analysis, envir = .GlobalEnv)
-            }
-            
-            analysis_result[[paste0(analysis, "cell_COLOR")]][idx["row"], idx["col"]] <- new_value
-            if (analysis == "ELISA")
-              analysis_result[[paste0(analysis, "cell_SN")]][idx["row"], idx["col"]] <- new_value
-            else if (analysis == "ENDOC")
-              analysis_result[[paste0(analysis, "cell_EXP")]][idx["row"], idx["col"]] <- new_value
-            
-            assign(paste0(analysis, "Result"), analysis_result, envir = .GlobalEnv)
-          })
-          
-          flags_analysis <- get(paste0("Flags", analysis))
-          if (!new_value %in% flags_analysis[[paste0("AllExp")]]) {
-            flags_analysis[[paste0("AllExp")]] <- unique(c(flags_analysis[[paste0("AllExp")]], new_value))
-            assign(paste0("Flags", analysis), flags_analysis, envir = .GlobalEnv)
-          }
-          
-          tableExcelColored(session = session,
-                            Result = get(paste0(analysis, "Result")), 
-                            FlagsExp = get(paste0("Flags", analysis)),
-                            type = "Update")
-          
-          output[[paste0(analysis, "SelectedValues")]] <- renderText(paste("Updated values", paste(current_values, collapse = " - "), ": sample name ", new_value))
-          output[[paste0(analysis, "matrix")]] <- renderDataTable({get(paste0(analysis, "Result"))[[paste0("TablePlot")]]})
-        }
-      }
-    } else if (selected_col == 5) {
-      color_code <- data[selected_row, "ColorCode"]
-      req(color_code != "", color_code != "white", color_code != "#FFFFFF")
-      
-      analysis_lower <- tolower(analysis)
-      matching_indices <- which(get(paste0(analysis, "Result"))[[paste0(analysis, "cell_COLOR")]] == color_code, arr.ind = TRUE)
-      num_matches <- nrow(matching_indices)
-      
-      processed_value <- gsub(" -  - ", " - NA - ", new_value)
-      processed_value <- sub("^ - ", "NA - ", processed_value)
-      processed_value <- sub(" - $", " - NA", processed_value)
-      
-      new_values <- strsplit(processed_value, " - ", fixed = TRUE)[[1]]
-      new_values[new_values == ""] <- NA  
-      
-      if (length(new_values) != num_matches) {
-        session$sendCustomMessage(type = "errorNotification", 
-                                  message = "Number of values does not match the number of matches.")
-      } else {
-        analysis_result <- get(paste0(analysis_lower, "Result"))
-        for (i in seq_along(matching_indices[, "row"])) {
-          if (!is.na(new_values[i]) && new_values[i] != "" && new_values[i] != "NA") { 
-            if (analysis == "ELISA")
-              analysis_result[[paste0(analysis, "cell_EXP")]][matching_indices[i, "row"], matching_indices[i, "col"]] <- new_values[i]
-            else 
-              analysis_result[[paste0(analysis, "cell_TIME")]][matching_indices[i, "row"], matching_indices[i, "col"]] <- new_values[i]
-          } 
-        }
-        assign(paste0(analysis_lower, "Result"), analysis_result, envir = .GlobalEnv)
-        
-        tableExcelColored(session = session,
-                          Result = analysis_result, 
-                          FlagsExp = get(paste0("Flags", analysis)),
-                          type = "Update")
-        
-        valid_values <- new_values[!is.na(new_values) & new_values != "" & new_values != "NA"]
-        final_values_string <- paste(valid_values, collapse = " - ")
-        output[[paste0(analysis, "SelectedValues")]] <- renderText(paste("Updated values for experimental conditions:", final_values_string))
-        output[[paste0(analysis, "matrix")]] <- renderDataTable({analysis_result[[paste0("TablePlot")]]})
-      }
-    }
-  }
-  
   observeEvent(input$leftTableElisa_cell_edit, {
     info <- input$leftTableElisa_cell_edit
-    updateTable("left", "ELISA", info)
+    data <- left_data_elisa() 
+    updatedText <- updateTable("left", "ELISA", info, data, elisaResult, FlagsELISA)
+    
+    output$ELISASelectedValues <- renderText(updatedText)  
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   observeEvent(input$rightTableElisa_cell_edit, {
     info <- input$rightTableElisa_cell_edit
-    updateTable("right", "ELISA", info)
+    data <- right_data_elisa() 
+    updatedText <- updateTable("right", "ELISA", info, data, elisaResult, FlagsELISA)
+    
+    output$ELISASelectedValues <- renderText(updatedText)  
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   observeEvent(input$ELISAmatrix_cell_clicked, {
@@ -1894,7 +1800,6 @@ server <- function(input, output, session) {
 
   observeEvent(input$ELISA_standcurve,{
     elisaResult$data -> data
-    print(data)
     if(input$ELISA_standcurve != ""){
       
       standcurve = data %>%
@@ -2237,12 +2142,18 @@ server <- function(input, output, session) {
 
   observeEvent(input$leftTableEndoc_cell_edit, {
     info <- input$leftTableEndoc_cell_edit
-    updateTable("left", "ENDOC", info)
+    data <- left_data_endoc() 
+    updatedText <- updateTable("left", "ENDOC", info, data, endocResult, FlagsENDOC)
+    
+    output$ENDOCSelectedValues <- renderText(updatedText)  
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   observeEvent(input$rightTableEndoc_cell_edit, {
     info <- input$rightTableEndoc_cell_edit
-    updateTable("right", "ENDOC", info)
+    data <- right_data_endoc() 
+    updatedText <- updateTable("right", "ENDOC", info, data, endocResult, FlagsENDOC)
+    
+    output$ENDOCSelectedValues <- renderText(updatedText)  
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   observeEvent(input$ENDOCmatrix_cell_clicked, {
@@ -2766,7 +2677,6 @@ server <- function(input, output, session) {
     }
   }
   
-  
   updateSelectizeUI <- function(maxDepth) {
     output$dynamicSelectize <- renderUI({
       rowContent <- fluidRow(
@@ -2776,9 +2686,9 @@ server <- function(input, output, session) {
             tags$div(style = "display: none;", id = paste("div_FACScell", i, sep = ""),
                      selectizeInput(
                        inputId = paste("FACScell", i, sep = "_"),
-                       label = paste("Level", i),
+                       label = paste("Gate", i),
                        choices = c(),
-                       options = list(placeholder = 'Select the next level', create = TRUE)
+                       options = list(placeholder = 'Select the next gate', create = TRUE)
                      )
             )
           )
@@ -2864,6 +2774,13 @@ server <- function(input, output, session) {
   loadDrop() 
   }, ignoreInit = TRUE)
   
+  observe({FlagsFACS$actualPath
+    updateSelectizeInput(session = session,
+                         inputId = "selectBaseGate",
+                         choices = colnames(FlagsFACS$data)
+      )
+    }
+  )
   
   escapeRegex <- function(string) {
     gsub("([\\\\^$.*+?()[{\\]|-])", "\\\\\\1", string)

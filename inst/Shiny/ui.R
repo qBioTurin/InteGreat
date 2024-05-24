@@ -784,7 +784,13 @@ ui <- dashboardPage(
                     )
                   ),
                   fluidRow(
-                    column(2, offset = 9,
+                    column(1, offset = 7,
+                           selectizeInput(inputId = "selectBaseGate",
+                                          label = "Destarting gate for calculation",
+                                          choices = ""
+                                          )
+                           ),
+                    column(2,
                            actionButton(inputId = "SaveFACSanalysis",
                                         label = 'Save',
                                         style = "width: 100%",
