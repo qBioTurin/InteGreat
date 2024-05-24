@@ -624,12 +624,13 @@ get_formatted_data <- function(colors, color_names, result, singleValue, analysi
 }
 
 updateTable <- function(position, analysis, info, data, result, flag) {
-  req(info)  # Assicurati che 'info' non sia NULL
+  req(info) 
   
   selected_row <- info$row
   selected_col <- info$col
   new_value <- info$value
   
+  # change the exp_condition column to ENDOC or sample_name to ELISA  
   if (selected_col == 4) {
     color_code <- data[selected_row, "ColorCode"]
     
@@ -651,6 +652,7 @@ updateTable <- function(position, analysis, info, data, result, flag) {
           }
           
           result[[paste0(analysis, "cell_COLOR")]][idx["row"], idx["col"]] <- new_value
+          # if ELISA, modify SN otherwise modify EXP
           if (analysis == "ELISA") {
             result[[paste0(analysis, "cell_SN")]][idx["row"], idx["col"]] <- new_value
           } else if (analysis == "ENDOC") {
@@ -666,7 +668,9 @@ updateTable <- function(position, analysis, info, data, result, flag) {
         }
       }
     }
-  } else if (selected_col == 5) {
+  } 
+  # change the time column to ENDOC or exp_condition to ELISA  
+  else if (selected_col == 5) {
     color_code <- data[selected_row, "ColorCode"]
     req(color_code != "", color_code != "white", color_code != "#FFFFFF")
     
@@ -674,6 +678,7 @@ updateTable <- function(position, analysis, info, data, result, flag) {
     matching_indices <- which(result[[paste0(analysis, "cell_COLOR")]] == color_code, arr.ind = TRUE)
     num_matches <- nrow(matching_indices)
     
+    # operation to set the unfilled values to NA and save only the modified position
     processed_value <- gsub(" -  - ", " - NA - ", new_value)
     processed_value <- sub("^ - ", "NA - ", processed_value)
     processed_value <- sub(" - $", " - NA", processed_value)
@@ -681,7 +686,7 @@ updateTable <- function(position, analysis, info, data, result, flag) {
     new_values <- strsplit(processed_value, " - ", fixed = TRUE)[[1]]
     new_values[new_values == ""] <- NA  
     
-    current_values <- new_values  # Assicurati di assegnare i nuovi valori a current_values
+    current_values <- new_values  
     
     if (length(new_values) != num_matches) {
       session$sendCustomMessage(type = "errorNotification", 
@@ -689,6 +694,7 @@ updateTable <- function(position, analysis, info, data, result, flag) {
     } else {
       for (i in seq_along(matching_indices[, "row"])) {
         if (!is.na(new_values[i]) && new_values[i] != "" && new_values[i] != "NA") {
+          # if ELISA, modify EXP otherwise modify TIME
           if (analysis == "ELISA") {
             result[[paste0(analysis, "cell_EXP")]][matching_indices[i, "row"], matching_indices[i, "col"]] <- new_values[i]
           } else {
