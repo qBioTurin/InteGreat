@@ -5,7 +5,7 @@ Sys.setenv("DATAVERSE_SERVER" = "dataverse.harvard.edu")
 APIkey_path = system.file("Data",".APIkey", package = "ORCA")
 
 #source(system.file("Shiny","AuxFunctions.R", package = "ORCA"))
-#source("./inst/Shiny/AuxFunctions.R")
+source("./inst/Shiny/AuxFunctions.R")
 
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
@@ -16,7 +16,8 @@ server <- function(input, output, session) {
                                        endocResult = NULL,
                                        elisaResult = NULL,
                                        pcrResult = NULL,
-                                       cytotoxResult = NULL)
+                                       cytotoxResult = NULL,
+                                       facsResult = NULL)
   
   DataIntegrationModule <- reactiveValues(dataLoaded = NULL,
                                           data = NULL,
@@ -27,8 +28,8 @@ server <- function(input, output, session) {
                                           otherTabs = NULL,
                                           otherTabsMean = NULL)
   
-  MapAnalysisNames =c("WB", "WB comparison", "Endocytosis", "ELISA", "RT-qPCR", "Cytotoxicity") 
-  names(MapAnalysisNames) =c("wbResult", "wbquantResult", "endocResult", "elisaResult", "pcrResult", "cytotoxResult") 
+  MapAnalysisNames =c("WB", "WB comparison", "Endocytosis", "ELISA", "RT-qPCR", "Cytotoxicity", "FACS") 
+  names(MapAnalysisNames) =c("wbResult", "wbquantResult", "endocResult", "elisaResult", "pcrResult", "cytotoxResult", "facsResult") 
   
   ### WB analysis ####
   
@@ -2633,6 +2634,8 @@ server <- function(input, output, session) {
     } else {
       if (nrow(mess) > 1) {
         data <- mess[-1, , drop = FALSE]  
+        facsResult$Initdata <- data
+        
         facsResult$depth <- vector("list", nrow(data))
         facsResult$depthCount <- numeric(nrow(data))
         facsResult$name <- vector("list", nrow(data))
@@ -2774,13 +2777,21 @@ server <- function(input, output, session) {
   loadDrop() 
   }, ignoreInit = TRUE)
   
-  observe({FlagsFACS$actualPath
+  observe({
+    FlagsFACS$actualPath
+    choices <- colnames(FlagsFACS$data)
+    choices <- choices[choices != "Name"]
+    
+    # Escludere l'ultima colonna
+    if (length(choices) > 1) {
+      choices <- choices[-length(choices)]
+    }
+    
     updateSelectizeInput(session = session,
                          inputId = "selectBaseGate",
-                         choices = colnames(FlagsFACS$data)
-      )
-    }
-  )
+                         choices = choices
+    )
+  })
   
   escapeRegex <- function(string) {
     gsub("([\\\\^$.*+?()[{\\]|-])", "\\\\\\1", string)
@@ -2849,46 +2860,96 @@ server <- function(input, output, session) {
     }
   })
   
-  convert_percent_to_final <- function(data_row) {
-    last_percentage_name <- names(data_row)[length(data_row)]
-    start_percent_index <- 2  
-
-    percentages = as.numeric(sub("%", "", data_row[start_percent_index:length(data_row)])) / 100
-    final_percentage = Reduce(`*`, percentages) * 100 
+  convert_percent_to_final <- function(data_row, selected_gate) {
+    last_percentage_name <- paste(names(data_row)[length(data_row)], selected_gate, sep = "/")
+    
+    if (selected_gate == "Start") {
+      initial_value <- as.numeric(data_row[2])
+      percentages <- as.numeric(sub("%", "", data_row[3:length(data_row)])) / 100
+      
+      final_percentage <- (Reduce(`*`, percentages) * 100 / initial_value) * 100
+    } else {
+      selected_gate_index <- which(names(data_row) == selected_gate)
+      
+      if (selected_gate_index == length(data_row) - 1) {
+        final_percentage <- as.numeric(sub("%", "", data_row[selected_gate_index + 1]))
+      } else {
+        percentages <- as.numeric(sub("%", "", data_row[(selected_gate_index + 2):length(data_row)])) / 100
+        
+        if (length(percentages) == 0) {
+          final_percentage <- as.numeric(sub("%", "", data_row[selected_gate_index + 1]))
+        } else {
+          selected_percentage <- as.numeric(sub("%", "", data_row[selected_gate_index + 1])) / 100
+          final_percentage <- selected_percentage * Reduce(`*`, percentages) * 100
+        }
+      }
+    }
     
     data.frame(Name = data_row[1], FinalPercent = sprintf("%.2f%%", final_percentage)) %>%
       setNames(c("Name", last_percentage_name))
   }
   
-  
   observeEvent(input$SaveFACSanalysis, {
-    start_percent_index <- 3
-    current_data <- FlagsFACS$data[, c(1, start_percent_index:ncol(FlagsFACS$data)), drop = FALSE]
+    selected_gate <- input$selectBaseGate
+    selected_gate_index <- which(names(FlagsFACS$data) == selected_gate)
     
-    processed_data <- lapply(split(current_data, seq(nrow(current_data))), convert_percent_to_final)
+    if (length(selected_gate_index) == 0) {
+      showNotification("Selected column not found in the dataset", type = "error")
+      return()
+    }
+    
+    current_data <- FlagsFACS$data[, c(1, 2, selected_gate_index:ncol(FlagsFACS$data)), drop = FALSE]
+    
+    processed_data <- lapply(split(current_data, seq(nrow(current_data))), function(row) {
+      convert_percent_to_final(row, selected_gate)
+    })
+    
     new_data <- do.call(rbind, processed_data)
     
     if (is.null(facsResult$data)) {
       facsResult$data <- new_data
     } else {
-      if (names(facsResult$data)[ncol(facsResult$data)] != names(new_data)[2]) {
-        facsResult$data[names(new_data)[2]] <- new_data[, 2]
+      new_column_name <- names(new_data)[2]
+      if (names(facsResult$data)[ncol(facsResult$data)] != new_column_name) {
+        facsResult$data[new_column_name] <- new_data[, 2]
       }
     }
     
     output$FACSresult <- renderDT({
       datatable(facsResult$data, 
-        options = list(
-          autoWidth = TRUE,
-          #editable = TRUE,
-          columnDefs = list(
-            list(visible = FALSE, targets = 0)  
-          )
-        ),
-        #editable = list(target = "cell", disable = list(2:ncol(facsResult$data)))
+                options = list(
+                  autoWidth = TRUE,
+                  columnDefs = list(
+                    list(visible = FALSE, targets = 0)  
+                  )
+                )
       )
     })
+    facsResult$dataFinal <- facsResult$data
   })
+  
+  output$downloadFACSanalysis <- downloadHandler(
+    filename = function() {
+      paste('FACSanalysis-', Sys.Date(), '.zip', sep='')
+    },
+    content = function(file) {
+      manageSpinner(TRUE)
+      
+      tempDir <- tempdir()
+      
+      nomeRDS <- paste0("FACSquant_analysis-", Sys.Date(), ".rds")
+      nomeXLSX <- paste0("FACSquant_analysis-", Sys.Date(), ".xlsx")
+      
+      tempRdsPath <- file.path(tempDir, nomeRDS)
+      tempXlsxPath <- file.path(tempDir, nomeXLSX)
+      results <- DataAnalysisModule$facsResult
+      saveRDS(results, file = tempRdsPath)
+      saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "FACS", PanelStructures)
+      
+      zip(file, files = c(tempRdsPath, tempXlsxPath), flags = "-j")
+      manageSpinner(FALSE)
+    },
+  )
   
   ### End FACS analysis ####
   

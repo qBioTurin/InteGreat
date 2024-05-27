@@ -784,7 +784,7 @@ ui <- dashboardPage(
                     )
                   ),
                   fluidRow(
-                    column(1, offset = 7,
+                    column(2, offset = 7,
                            selectizeInput(inputId = "selectBaseGate",
                                           label = "Destarting gate for calculation",
                                           choices = ""
@@ -793,7 +793,7 @@ ui <- dashboardPage(
                     column(2,
                            actionButton(inputId = "SaveFACSanalysis",
                                         label = 'Save',
-                                        style = "width: 100%",
+                                        style = "width: 100%; margin-top: 25px;",
                                         align = "right",
                                         icon = shiny::icon("forward"))
                     )
@@ -808,7 +808,7 @@ ui <- dashboardPage(
               fluidRow(
                 column(width = 2,offset = 9,
                        downloadButton( label = "Download Analysis & Excel", 
-                                       outputId = "downloadButtoFACSanalysis",
+                                       outputId = "downloadFACSanalysis",
                                        icon = icon("download") 
                                       )
                 )

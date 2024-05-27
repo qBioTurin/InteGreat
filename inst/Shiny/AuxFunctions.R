@@ -422,13 +422,25 @@ saveExcel <- function(filename, ResultList, analysis, PanelStructures = NULL) {
         print("Errore: Initdata non disponibile o non è un data.frame")
       }
       
-      # Se esiste anche dataFinal e vuoi scriverlo su un altro foglio
       if (!is.null(ResultList$dataFinal) && is.data.frame(ResultList$dataFinal)) {
-        addWorksheet(wb, "Results Analysis")  # Aggiunge un foglio per l'analisi finale
-        writeDataTable(wb, ResultList$dataFinal, sheet = "Results Analysis")  # Scrive i dati di analisi finale
-        print("dataFinal scritto nel foglio Excel")
-      } else {
-        print("dataFinal non disponibile o non è un data.frame")
+        addWorksheet(wb, "Results Analysis")  
+        writeDataTable(wb, ResultList$dataFinal, sheet = "Results Analysis")  
+      }
+    },
+    "FACS" = {
+      wb <- createWorkbook("FACS")
+      
+      print(ResultList$Initdata)
+      print(ResultList$data)
+      print(ResultList$dataFinal)
+      
+      if (!is.null(ResultList$Initdata) && is.data.frame(ResultList$Initdata)) {
+        addWorksheet(wb, "Init data") 
+        writeDataTable(wb, ResultList$Initdata, sheet = "Init data")  
+      }
+      if (!is.null(ResultList$dataFinal) && is.data.frame(ResultList$dataFinal)) {
+        addWorksheet(wb, "Final data") 
+        writeDataTable(wb, ResultList$dataFinal, sheet = "Final data")  
       }
     }
   )
