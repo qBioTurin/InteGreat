@@ -806,6 +806,16 @@ ui <- dashboardPage(
                 ),
               ),
               fluidRow(
+                box(
+                  title = "FACS Name Update", 
+                  solidHeader = TRUE, 
+                  collapsible = TRUE, 
+                  collapsed = TRUE, 
+                  width = 12,
+                  dataTableOutput("FACSnameUpdate")
+                )
+              ),
+              fluidRow(
                 column(width = 2,offset = 9,
                        downloadButton( label = "Download Analysis & Excel", 
                                        outputId = "downloadFACSanalysis",

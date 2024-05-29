@@ -1373,7 +1373,7 @@ server <- function(input, output, session) {
         matTime <- as.matrix(elisaResult$ELISAcell_EXP)
         matExp <- as.matrix(elisaResult$ELISAcell_COLOR)
         
-        #if (!(all(matTime == "") || all(matExp == ""))) {
+        if (!(all(matTime == "") || all(matExp == ""))) {
           mat <- as.matrix(elisaResult$Initdata)
           elisaV <- expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
             rowwise() %>%
@@ -1403,7 +1403,7 @@ server <- function(input, output, session) {
                                                      linetype = "solid",
                                                      colour = "black"))
           })
-        #}
+        }
       }
     } 
   })
@@ -1592,6 +1592,7 @@ server <- function(input, output, session) {
                                selected = FlagsELISA$BLANCHEselected )
     }
   })
+  
   observeEvent(c(FlagsELISA$AllExp,FlagsELISA$BLANCHEselected,FlagsELISA$STDCselected),{
     if(length(FlagsELISA$AllExp) > 1){
       exp = FlagsELISA$AllExp
@@ -2561,6 +2562,7 @@ server <- function(input, output, session) {
     depth = NULL,
     depthCount = NULL,
     name = NULL,
+    originalName = NULL,
     statistics = NULL,
     cells = NULL
   )
@@ -2572,6 +2574,7 @@ server <- function(input, output, session) {
     depth = NULL,
     depthCount = NULL,
     name = NULL,
+    originalName = NULL,
     statistics = NULL,
     cells = NULL
   )
@@ -2639,6 +2642,7 @@ server <- function(input, output, session) {
         facsResult$depth <- vector("list", nrow(data))
         facsResult$depthCount <- numeric(nrow(data))
         facsResult$name <- vector("list", nrow(data))
+        facsResult$originalName <- vector("list", nrow(data))
         facsResult$statistics <- vector("list", nrow(data))
         facsResult$cells <- vector("list", nrow(data))
         
@@ -2721,8 +2725,9 @@ server <- function(input, output, session) {
       Start = unlist(filtered_cells),
       stringsAsFactors = FALSE
     )
-    FlagsFACS$data <- data_for_table  
     
+    facsResult$originalName <- unlist(filtered_names)
+    FlagsFACS$data <- data_for_table  
     FlagsFACS$actualPath <- ""
     
     output$FACSmatrix <- renderDT({
@@ -2733,6 +2738,23 @@ server <- function(input, output, session) {
           list(title = "", targets = 2)  
         )
       ))
+    })
+    
+    data_for_name_update <- data.frame(
+      Name = unlist(filtered_names),
+      New_name = rep("-", length(filtered_names)),  # Colonna con trattini iniziali
+      stringsAsFactors = FALSE
+    )
+    
+    output$FACSnameUpdate <- renderDT({
+      datatable(data_for_name_update, options = list(
+        pageLength = 10,
+        autoWidth = TRUE,
+        columnDefs = list(
+          list(targets = 1, width = '50%'),  # Imposta la larghezza della prima colonna
+          list(targets = 2, width = '50%')
+        )
+      ), editable = list(target = 'cell', columns = 2))  # Permetti l'editing della seconda colonna
     })
   } else {
     selected_item <- input[[currentInputId]]
@@ -2782,7 +2804,6 @@ server <- function(input, output, session) {
     choices <- colnames(FlagsFACS$data)
     choices <- choices[choices != "Name"]
     
-    # Escludere l'ultima colonna
     if (length(choices) > 1) {
       choices <- choices[-length(choices)]
     }
@@ -2950,6 +2971,52 @@ server <- function(input, output, session) {
       manageSpinner(FALSE)
     },
   )
+  
+  observeEvent(input$FACSnameUpdate_cell_edit, {
+    info <- input$FACSnameUpdate_cell_edit
+    
+    row <- info$row
+    col <- info$col
+    new_value <- info$value
+    
+    if (col == 2) {  
+      associated_name <- FlagsFACS$data[row, "Name"]
+      
+      index <- which(facsResult$name == associated_name)
+      
+      if (length(index) > 0) {
+        if (new_value == "") {
+          original_name <- as.character(facsResult$originalName[row])
+          for (i in seq_along(facsResult$name)) {
+            name_parts <- strsplit(as.character(facsResult$name[i]), "/", fixed = TRUE)[[1]]
+            if (name_parts[1] == associated_name) {
+              name_parts[1] <- original_name
+              facsResult$name[i] <- paste(name_parts, collapse = "/")
+            }
+          }
+        } else {
+          for (i in seq_along(facsResult$name)) {
+            if (startsWith(as.character(facsResult$name[i]), as.character(associated_name))) {
+              suffix <- substr(facsResult$name[i], nchar(associated_name) + 1, nchar(facsResult$name[i]))
+              facsResult$name[i] <- paste0(new_value, suffix)
+            }
+          }
+        }
+        print(facsResult$name)
+      }
+    }
+  })
+  
+  observeEvent(facsResult$name, {
+    valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
+    filtered_names <- facsResult$name[valid_indices]
+    
+    FlagsFACS$data$Name <- sapply(filtered_names, function(name) strsplit(name, "/")[[1]][1])
+    
+    proxy <- dataTableProxy('FACSmatrix')
+    replaceData(proxy, FlagsFACS$data, resetPaging = FALSE)
+  }, ignoreInit = TRUE)
+  
   
   ### End FACS analysis ####
   
