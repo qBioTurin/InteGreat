@@ -1802,18 +1802,15 @@ server <- function(input, output, session) {
 
   observeEvent(input$ELISA_standcurve,{
     elisaResult$data -> data
+    print(data)
     if(input$ELISA_standcurve != ""){
       
       standcurve = data %>%
         filter(exp %in% input$ELISA_standcurve) %>%
-        # group_by(exp,time) %>%
-        # summarise(AverageMeasures = mean(values)) %>%
-        # ungroup() %>%
         select(exp,time,values) %>%
         rename(Measures = values) %>%
         mutate(Concentrations = NA )
       
-      # If nothing changes w..r.t. the already saved table then I keep the old one!
       if(!is.null(elisaResult$Tablestandcurve) && 
          all.equal(elisaResult$Tablestandcurve %>% select(-Concentrations),
                    standcurve  %>% select(-Concentrations) ))
@@ -1823,13 +1820,11 @@ server <- function(input, output, session) {
         elisaResult$Tablestandcurve = standcurve
       }
       
-      
       output$ELISA_Table_stdcurve <- DT::renderDataTable({
         DT::datatable( standcurve,
                        selection = 'none',
                        editable = list(target = "cell",
                                        disable = list(columns = 0:2) ),
-                       #options = list(lengthChange = FALSE, autoWidth = TRUE),
                        rownames= FALSE
         )
       })
@@ -1858,6 +1853,7 @@ server <- function(input, output, session) {
                                              cells,
                                              'ELISA_Table_stdcurve')
   })
+  
   observeEvent(input$ELISA_buttonRegression,{
     standcurve = elisaResult$Tablestandcurve
     standcurve$Concentrations = as.numeric(standcurve$Concentrations)
@@ -2668,21 +2664,19 @@ server <- function(input, output, session) {
         removeModal()
         
         maxDepth <- max(facsResult$depthCount, na.rm = TRUE)
+        showAlert("Success", "The Excel has been uploaded with success", "success", 2000)
+        updateSelectizeUI(maxDepth)
         
-        # Primo: cambia la tab
         updateTabsetPanel(session, "SideTabs", selected = "tablesFACS")
-        
-        # Secondo: Ascolta il cambio della tab e poi esegue le funzioni
-        observeEvent(input$SideTabs, {
-          if (input$SideTabs == "tablesFACS") {
-            updateSelectizeUI(maxDepth)
-            FlagsFACS$actualLevel <- 0
-            showAlert("Success", "The Excel has been uploaded with success", "success", 2000)
-          }
-        }, ignoreInit = TRUE)  # Assicurati di non eseguire al primo caricamento
       }
     }
   }
+  
+  observeEvent(input$SideTabs, {
+    if (input$SideTabs == "tablesFACS") {
+      FlagsFACS$actualLevel <- 0
+    }
+  }, ignoreInit = TRUE)  
   
   updateSelectizeUI <- function(maxDepth) {
     output$dynamicSelectize <- renderUI({
