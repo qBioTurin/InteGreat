@@ -1372,7 +1372,7 @@ server <- function(input, output, session) {
       if (!is.null(elisaResult$ELISAcell_EXP) && !is.null(elisaResult$ELISAcell_COLOR)) {
         matTime <- as.matrix(elisaResult$ELISAcell_EXP)
         matExp <- as.matrix(elisaResult$ELISAcell_COLOR)
-        
+
         if (!(all(matTime == "") || all(matExp == ""))) {
           mat <- as.matrix(elisaResult$Initdata)
           elisaV <- expand.grid(seq_len(nrow(mat)), seq_len(ncol(mat))) %>%
@@ -1802,9 +1802,8 @@ server <- function(input, output, session) {
 
   observeEvent(input$ELISA_standcurve,{
     elisaResult$data -> data
-    print(data)
+    
     if(input$ELISA_standcurve != ""){
-      
       standcurve = data %>%
         filter(exp %in% input$ELISA_standcurve) %>%
         select(exp,time,values) %>%
@@ -1819,7 +1818,7 @@ server <- function(input, output, session) {
       }else{
         elisaResult$Tablestandcurve = standcurve
       }
-      
+      print(standcurve)
       output$ELISA_Table_stdcurve <- DT::renderDataTable({
         DT::datatable( standcurve,
                        selection = 'none',
@@ -1846,6 +1845,7 @@ server <- function(input, output, session) {
       })
     } 
   })
+  
   observeEvent(input$ELISA_Table_stdcurve_cell_edit, {
     cells = input$ELISA_Table_stdcurve_cell_edit
     cells$col = cells$col + 1
@@ -2558,7 +2558,7 @@ server <- function(input, output, session) {
     depth = NULL,
     depthCount = NULL,
     name = NULL,
-    originalName = NULL,
+    columnName = NULL,
     statistics = NULL,
     cells = NULL
   )
@@ -2570,7 +2570,7 @@ server <- function(input, output, session) {
     depth = NULL,
     depthCount = NULL,
     name = NULL,
-    originalName = NULL,
+    columnName = NULL,
     statistics = NULL,
     cells = NULL
   )
@@ -2700,106 +2700,144 @@ server <- function(input, output, session) {
   }
   
   observeEvent(FlagsFACS$actualLevel, {
-  currentInputId <- paste("FACScell", FlagsFACS$actualLevel, sep = "_")
-  
-  if (FlagsFACS$actualLevel == 0) {
-    valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
-    filtered_cells <- list()
-    filtered_names <- list()
+    currentInputId <- paste("FACScell", FlagsFACS$actualLevel, sep = "_")
     
-    if (any(valid_indices)) {
-      for (i in which(valid_indices)) {
-        filtered_cells <- c(filtered_cells, facsResult$cells[i])
-        filtered_names <- c(filtered_names, facsResult$name[i])
-      }
-    }
-    
-    data_for_table <- data.frame(
-      Name = unlist(filtered_names),
-      Start = unlist(filtered_cells),
-      stringsAsFactors = FALSE
-    )
-    
-    facsResult$originalName <- unlist(filtered_names)
-    FlagsFACS$data <- data_for_table  
-    FlagsFACS$actualPath <- ""
-    
-    output$FACSmatrix <- renderDT({
-      datatable(data_for_table, options = list(
-        pageLength = 10,
-        autoWidth = TRUE,
-        columnDefs = list(
-          list(title = "", targets = 2)  
-        )
-      ))
-    })
-    
-    data_for_name_update <- data.frame(
-      Name = unlist(filtered_names),
-      New_name = rep("-", length(filtered_names)),  # Colonna con trattini iniziali
-      stringsAsFactors = FALSE
-    )
-    
-    output$FACSnameUpdate <- renderDT({
-      datatable(data_for_name_update, options = list(
-        pageLength = 10,
-        autoWidth = TRUE,
-        columnDefs = list(
-          list(targets = 1, width = '50%'),  # Imposta la larghezza della prima colonna
-          list(targets = 2, width = '50%')
-        )
-      ), editable = list(target = 'cell', columns = 2))  # Permetti l'editing della seconda colonna
-    })
-  } else {
-    selected_item <- input[[currentInputId]]
-    path_components <- strsplit(FlagsFACS$actualPath, "/")[[1]]
-    if (length(path_components) >= FlagsFACS$actualLevel) {
-      path_components <- path_components[1:(FlagsFACS$actualLevel - 1)]
-    }
-    path_components <- c(path_components, selected_item)
-    FlagsFACS$actualPath <- paste(path_components, collapse = "/")
-    
-    if (ncol(FlagsFACS$data) > length(path_components) + 1) {  
-      FlagsFACS$data <- FlagsFACS$data[, c(1, (2:length(path_components) + 1)), drop = FALSE]
-    }
-    
-    new_column_name <- tail(path_components, n = 1)  
-    new_column_data <- vector("numeric", length = nrow(FlagsFACS$data))
-    
-    for (i in seq_len(nrow(FlagsFACS$data))) {
-      new_path <- paste0(FlagsFACS$data$Name[i], "/", FlagsFACS$actualPath)
-      index <- which(facsResult$name == new_path)
+    if (FlagsFACS$actualLevel == 0) {
+      valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
+      filtered_cells <- list()
+      filtered_names <- list()
       
-      if (length(index) == 1) {
-        new_column_data[i] <- sprintf("%.2f%%", facsResult$statistics[index])
-      } else {
-        new_column_data[i] <- NA
+      if (any(valid_indices)) {
+        for (i in which(valid_indices)) {
+          filtered_cells <- c(filtered_cells, facsResult$cells[i])
+          filtered_names <- c(filtered_names, facsResult$name[i])
+        }
       }
-    }
-    
-    maxLevels <- max(facsResult$depthCount, na.rm = TRUE)
-    if (FlagsFACS$actualLevel < maxLevels) {
-      lapply((FlagsFACS$actualLevel + 1):maxLevels, function(level) {
-        updateSelectizeInput(session, paste("FACScell", level, sep = "_"), choices = list())
+      
+      data_for_table <- data.frame(
+        Name = unlist(filtered_names),
+        Start = "100%",
+        stringsAsFactors = FALSE
+      )
+      
+      facsResult$originalName <- unlist(filtered_names)
+      FlagsFACS$data <- data_for_table  
+      FlagsFACS$actualPath <- ""
+      
+      output$FACSmatrix <- renderDT({
+        datatable(data_for_table, options = list(
+          pageLength = 10,
+          autoWidth = TRUE
+        ))
+      })
+      
+      data_for_name_update <- data.frame(
+        Name = unlist(filtered_names),
+        New_name = rep("-", length(filtered_names)),  
+        stringsAsFactors = FALSE
+      )
+      
+      output$FACSnameUpdate <- renderDT({
+        datatable(data_for_name_update, options = list(
+          pageLength = 10,
+          autoWidth = TRUE,
+          columnDefs = list(
+            list(targets = 1, width = '50%'),  
+            list(targets = 2, width = '50%')
+          )
+        ), editable = list(target = 'cell', columns = 2))  
+      })
+      
+      data_for_column_update <- data.frame(
+        Name = colnames(data_for_table)[-1],  
+        New_name = rep("-", length(colnames(data_for_table)) - 1),
+        stringsAsFactors = FALSE
+      )
+      
+      facsResult$columnName <- data_for_column_update
+      
+      output$FACScolumnNameUpdate <- renderDT({
+        datatable(data_for_column_update, options = list(
+          pageLength = 10,
+          autoWidth = TRUE,
+          columnDefs = list(
+            list(targets = 1, width = '50%'),  
+            list(targets = 2, width = '50%')
+          )
+        ), editable = list(target = 'cell', columns = 2))  
+      })
+    } else {
+      selected_item <- input[[currentInputId]]
+      path_components <- strsplit(FlagsFACS$actualPath, "/")[[1]]
+      if (length(path_components) >= FlagsFACS$actualLevel) {
+        path_components <- path_components[1:(FlagsFACS$actualLevel - 1)]
+      }
+      path_components <- c(path_components, selected_item)
+      FlagsFACS$actualPath <- paste(path_components, collapse = "/")
+      
+      if (ncol(FlagsFACS$data) > length(path_components) + 1) {  
+        FlagsFACS$data <- FlagsFACS$data[, c(1, (2:length(path_components) + 1)), drop = FALSE]
+      }
+      
+      new_column_name <- tail(path_components, n = 1)  
+      new_column_data <- vector("numeric", length = nrow(FlagsFACS$data))
+      
+      for (i in seq_len(nrow(FlagsFACS$data))) {
+        new_path <- paste0(FlagsFACS$data$Name[i], "/", FlagsFACS$actualPath)
+        index <- which(facsResult$name == new_path)
+        
+        if (length(index) == 1) {
+          new_column_data[i] <- sprintf("%.2f%%", facsResult$statistics[index])
+        } else {
+          new_column_data[i] <- NA
+        }
+      }
+      
+      maxLevels <- max(facsResult$depthCount, na.rm = TRUE)
+      if (FlagsFACS$actualLevel < maxLevels) {
+        lapply((FlagsFACS$actualLevel + 1):maxLevels, function(level) {
+          updateSelectizeInput(session, paste("FACScell", level, sep = "_"), choices = list())
+        })
+      }
+      
+      FlagsFACS$data[[new_column_name]] <- new_column_data
+      
+      data_for_column_update <- data.frame(
+        Name = colnames(FlagsFACS$data),
+        New_name = rep("-", length(colnames(FlagsFACS$data))),
+        stringsAsFactors = FALSE
+      )
+      
+      data_for_column_update <- data_for_column_update[data_for_column_update$Name != "Name", ]
+      
+      facsResult$columnName <- data_for_column_update
+      output$FACSmatrix <- renderDT({
+        datatable(FlagsFACS$data, options = list(autoWidth = TRUE))
+      })
+      
+      output$FACScolumnNameUpdate <- renderDT({
+        datatable(data_for_column_update, options = list(
+          pageLength = 10,
+          autoWidth = TRUE,
+          columnDefs = list(
+            list(targets = 1, width = '50%'),  
+            list(targets = 2, width = '50%'),
+            list(visible = FALSE, targets = 0)  
+          )
+        ), editable = list(target = 'cell', columns = 2))
       })
     }
-    
-    FlagsFACS$data[[new_column_name]] <- new_column_data
-    
-    output$FACSmatrix <- renderDT({
-      datatable(FlagsFACS$data, options = list(autoWidth = TRUE))
-    })
-  }
-  loadDrop() 
+    loadDrop() 
   }, ignoreInit = TRUE)
-  
+
   observe({
     FlagsFACS$actualPath
     choices <- colnames(FlagsFACS$data)
-    choices <- choices[choices != "Name"]
     
-    if (length(choices) > 1) {
-      choices <- choices[-length(choices)]
+    if (length(choices) > 2) {
+      choices <- choices[3:length(choices) - 1]  
+    } else {
+      choices <- character(0) 
     }
     
     updateSelectizeInput(session = session,
@@ -2877,37 +2915,35 @@ server <- function(input, output, session) {
   
   convert_percent_to_final <- function(data_row, selected_gate) {
     last_percentage_name <- paste(names(data_row)[length(data_row)], selected_gate, sep = "/")
-    
-    if (selected_gate == "Start") {
-      initial_value <- as.numeric(data_row[2])
-      percentages <- as.numeric(sub("%", "", data_row[3:length(data_row)])) / 100
+
+    selected_gate_index <- which(names(data_row) == selected_gate)
       
-      final_percentage <- (Reduce(`*`, percentages) * 100 / initial_value) * 100
+    if (selected_gate_index == length(data_row) - 1) {
+      final_percentage <- as.numeric(sub("%", "", data_row[selected_gate_index + 1]))
     } else {
-      selected_gate_index <- which(names(data_row) == selected_gate)
-      
-      if (selected_gate_index == length(data_row) - 1) {
+      percentages <- as.numeric(sub("%", "", data_row[(selected_gate_index + 2):length(data_row)])) / 100
+        
+      if (length(percentages) == 0) {
         final_percentage <- as.numeric(sub("%", "", data_row[selected_gate_index + 1]))
       } else {
-        percentages <- as.numeric(sub("%", "", data_row[(selected_gate_index + 2):length(data_row)])) / 100
-        
-        if (length(percentages) == 0) {
-          final_percentage <- as.numeric(sub("%", "", data_row[selected_gate_index + 1]))
-        } else {
-          selected_percentage <- as.numeric(sub("%", "", data_row[selected_gate_index + 1])) / 100
-          final_percentage <- selected_percentage * Reduce(`*`, percentages) * 100
-        }
+        selected_percentage <- as.numeric(sub("%", "", data_row[selected_gate_index + 1])) / 100
+        final_percentage <- selected_percentage * Reduce(`*`, percentages) * 100
       }
     }
-    
+  
     data.frame(Name = data_row[1], FinalPercent = sprintf("%.2f%%", final_percentage)) %>%
-      setNames(c("Name", last_percentage_name))
+    setNames(c("Name", last_percentage_name))
   }
   
   observeEvent(input$SaveFACSanalysis, {
+    if (is.null(input$selectBaseGate) || input$selectBaseGate == "") {
+      showAlert("Error", "No gate selected. Please select a gate", "error", 5000)
+      return()
+    }
+    
     selected_gate <- input$selectBaseGate
     selected_gate_index <- which(names(FlagsFACS$data) == selected_gate)
-    
+
     if (length(selected_gate_index) == 0) {
       showNotification("Selected column not found in the dataset", type = "error")
       return()
@@ -2921,12 +2957,29 @@ server <- function(input, output, session) {
     
     new_data <- do.call(rbind, processed_data)
     
+    # Controlla e aggiorna i nomi
+    current_names <- FlagsFACS$data$Name
+    if (!is.null(facsResult$data)) {
+      facsResult$data$Name <- current_names
+    }
+    
+    new_column_name <- names(new_data)[2]
     if (is.null(facsResult$data)) {
       facsResult$data <- new_data
     } else {
-      new_column_name <- names(new_data)[2]
-      if (names(facsResult$data)[ncol(facsResult$data)] != new_column_name) {
-        facsResult$data[new_column_name] <- new_data[, 2]
+      if (new_column_name %in% names(facsResult$data)) {
+        facsResult$data[[new_column_name]] <- new_data[, 2]
+      } else {
+        facsResult$data <- cbind(facsResult$data, new_data[, 2])
+        names(facsResult$data)[ncol(facsResult$data)] <- new_column_name
+      }
+    }
+    
+    # Controllo per rimuovere colonne duplicate se i dati sono identici
+    existing_column_names <- names(facsResult$data)
+    for (col_name in existing_column_names) {
+      if (col_name != new_column_name && all(facsResult$data[[col_name]] == facsResult$data[[new_column_name]])) {
+        facsResult$data[[col_name]] <- NULL
       }
     }
     
@@ -2940,6 +2993,7 @@ server <- function(input, output, session) {
                 )
       )
     })
+    
     facsResult$dataFinal <- facsResult$data
   })
   
@@ -2975,12 +3029,16 @@ server <- function(input, output, session) {
     
     if (col == 2) {  
       associated_name <- FlagsFACS$data[row, "Name"]
-      
+
       index <- which(facsResult$name == associated_name)
+      
+      print("Index found:")
+      print(index)
       
       if (length(index) > 0) {
         if (new_value == "") {
           original_name <- as.character(facsResult$originalName[row])
+          
           for (i in seq_along(facsResult$name)) {
             name_parts <- strsplit(as.character(facsResult$name[i]), "/", fixed = TRUE)[[1]]
             if (name_parts[1] == associated_name) {
@@ -2996,7 +3054,6 @@ server <- function(input, output, session) {
             }
           }
         }
-        print(facsResult$name)
       }
     }
   })
@@ -3004,12 +3061,65 @@ server <- function(input, output, session) {
   observeEvent(facsResult$name, {
     valid_indices <- facsResult$depthCount == FlagsFACS$actualLevel
     filtered_names <- facsResult$name[valid_indices]
-    
-    FlagsFACS$data$Name <- sapply(filtered_names, function(name) strsplit(name, "/")[[1]][1])
+
+    unique_names <- unique(sapply(filtered_names, function(name) strsplit(name, "/")[[1]][1]))
+    FlagsFACS$data$Name <- unique_names
     
     proxy <- dataTableProxy('FACSmatrix')
     replaceData(proxy, FlagsFACS$data, resetPaging = FALSE)
+
   }, ignoreInit = TRUE)
+  
+  
+  observeEvent(input$FACScolumnNameUpdate_cell_edit, {
+    info <- input$FACScolumnNameUpdate_cell_edit
+    
+    row <- info$row
+    col <- info$col
+    new_value <- info$value
+    
+    if (new_value == "") {
+      showAlert("Error", "A column name cannot be empty", "error", 5000)
+      return()
+    }
+    
+    old_name <- facsResult$columnName[row, "Name"]
+    
+    for (i in seq_along(facsResult$name)) {
+      if (grepl(old_name, facsResult$name[[i]])) {
+        facsResult$name[[i]] <- gsub(old_name, new_value, facsResult$name[[i]])
+      }
+    }
+    
+    colnames(FlagsFACS$data) <- sapply(colnames(FlagsFACS$data), function(col_name) {
+      if (col_name == old_name) {
+        return(new_value)
+      } else {
+        return(col_name)
+      }
+    })
+    
+    
+    FlagsFACS$actualPath <- gsub(old_name, new_value, FlagsFACS$actualPath)
+
+    facsResult$columnName[row, "Name"] <- new_value
+    facsResult$columnName[row, "New_name"] <- "-"
+    
+    output$FACScolumnNameUpdate <- renderDT({
+      datatable(facsResult$columnName, options = list(
+        pageLength = 10,
+        autoWidth = TRUE,
+        columnDefs = list(
+          list(targets = 1, width = '50%'),
+          list(targets = 2, width = '50%')
+        )
+      ), editable = list(target = 'cell', columns = 2))
+    })
+    
+    output$FACSmatrix <- renderDT({
+      datatable(FlagsFACS$data, options = list(autoWidth = TRUE))
+    })
+  })
   
   
   ### End FACS analysis ####
