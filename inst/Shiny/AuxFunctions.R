@@ -104,23 +104,39 @@ resetPanel <- function(type, flags = NULL, panelStructures = NULL, numberOfPlane
            flags$EXPselected <- ""
            flags$EXPcol <- NULL
         },
-        "FACS" = {
-          result$Initdata <- NULL
-          result$data <- NULL
-          result$dataFinal <- NULL
-          result$depth <- NULL
-          result$depthCount <- NULL
-          result$name <- NULL
-          result$statistics <- NULL
-          result$cells <- NULL
-          
-          flags$actualLevel <- NULL
-          flags$allLevel <- NULL
-          flags$actualPath <- NULL
+        "CYTOTOX" = {
+           result$Initdata <- NULL
+           result$data <- NULL
+           result$TablePlot <- NULL
+           result$dataFinal <- NULL
+           result$CYTOTOXcell_EXP <- NULL
+           result$CYTOTOXcell_REP <- NULL
+           result$CYTOTOXcell_SN <- NULL
+           result <- MapBaseline <- NULL
+           
+           flags$cellCoo <- NULL
+           flags$AllExp <- NULL
+           flags$BASEselected <- NULL
+           flags$EXPselected <- NULL
+           flags$EXPcol <- NULL
         },
-         error = function(cond) {
+        "FACS" = {
+           result$Initdata <- NULL
+           result$data <- NULL
+           result$dataFinal <- NULL
+           result$depth <- NULL
+           result$depthCount <- NULL
+           result$name <- NULL
+           result$statistics <- NULL
+           result$cells <- NULL
+          
+           flags$actualLevel <- NULL
+           flags$allLevel <- NULL
+           flags$actualPath <- NULL
+        },
+        error = function(cond) {
            showAlert("Error", "an error occured", "error", 5000)
-         }
+        }
   )
 }
 
@@ -449,11 +465,11 @@ saveExcel <- function(filename, ResultList, analysis, PanelStructures = NULL) {
   return(1)  # Restituisce 1 per indicare il successo
 }
 
-tableExcelColored = function(session, output,Result, FlagsExp, type){
+tableExcelColored = function(session, output, Result, FlagsExp, type){
   switch(type,
       "Initialize" = {
       ExpDataTable = Result$Initdata
-      
+
       if(is.null(FlagsExp$EXPcol)){
         ExpDataTable.colors = matrix("",nrow = nrow(ExpDataTable),ncol=ncol(ExpDataTable))
       }else{
@@ -588,7 +604,7 @@ get_formatted_data <- function(colors, color_names, result, singleValue, analysi
   column_TIME <- paste0(analysis, "cell_TIME")  
   
   # Set variable names based on analysis type
-  if (analysis == "ELISA") {
+  if (analysis == "ELISA" || analysis == "CYTOTOX") {
     value1 = "Sample Name"
     value2 = "Experimental condition"
     column_EXP <- paste0(analysis, "cell_SN") 
@@ -608,12 +624,26 @@ get_formatted_data <- function(colors, color_names, result, singleValue, analysi
       formatted_output <- paste(unlist(selected_values), collapse = " - ")
       
       time_values <- apply(matching_indices, 1, function(idx) {
-        val <- if (analysis == "ELISA") result$ELISAcell_EXP[idx["row"], idx["col"]]
-        else result$ENDOCcell_TIME[idx["row"], idx["col"]]
+        if (analysis == "ELISA") {
+          val <- result$ELISAcell_EXP[idx["row"], idx["col"]]
+        } else if (analysis == "CYTOTOX") {
+          val <- result$CYTOTOXcell_EXP[idx["row"], idx["col"]]
+        } else {
+          val <- result$ENDOCcell_TIME[idx["row"], idx["col"]]
+        }
         if (!is.na(val) && !is.null(val) && val != "") val else ""
       })
       
+      if (analysis == "CYTOTOX") {
+        rep_values <- apply(matching_indices, 1, function(idx) {
+          val <- result$CYTOTOXcell_REP[idx["row"], idx["col"]]
+          if (!is.na(val) && !is.null(val) && val != "") val else ""
+        })
+      }
+      
+      
       time_output <- paste(unlist(time_values), collapse = " - ")
+      if (analysis == "CYTOTOX") rep_output <- paste(unlist(rep_values), collapse = " - ")
       
       exp_values <- apply(matching_indices, 1, function(idx) {
         result[[column_EXP]][idx["row"], idx["col"]]
@@ -624,17 +654,29 @@ get_formatted_data <- function(colors, color_names, result, singleValue, analysi
       } else {
         exp_condition <- "No matching between values"
       }
-      
-      formatted_data[[i]] <- setNames(
-        data.frame(
-          ColorCode = color_names[i],
-          Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px;'></div>", colors[i]),
-          Values = formatted_output,
-          exp_condition,
-          time_output
-        ),
-        c("ColorCode", "Color", "Values", value1, value2)
-      )
+      if (analysis != "CYTOTOX") {
+        formatted_data[[i]] <- setNames(
+          data.frame(
+            ColorCode = color_names[i],
+            Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px;'></div>", colors[i]),
+            Values = formatted_output,
+            exp_condition,
+            time_output
+          ),
+          c("ColorCode", "Color", "Values", value1, value2)
+        )
+      } else 
+        formatted_data[[i]] <- setNames(
+          data.frame(
+            ColorCode = color_names[i],
+            Color = sprintf("<div style='background-color: %s; padding: 10px; margin-right:20px;'></div>", colors[i]),
+            Values = formatted_output,
+            exp_condition,
+            time_output,
+            rep_output
+          ),
+          c("ColorCode", "Color", "Values", value1, value2, "ReplicateNumber")
+        )
     } else {
       formatted_data[[i]] <- setNames(
         data.frame(
@@ -657,7 +699,7 @@ updateTable <- function(position, analysis, info, data, result, flag) {
   selected_col <- info$col
   new_value <- info$value
   
-  # change the exp_condition column to ENDOC or sample_name to ELISA  
+  # change the exp_condition column to ENDOC or sample_name to ELISA and CYTOTOX
   if (selected_col == 4) {
     color_code <- data[selected_row, "ColorCode"]
     
@@ -679,8 +721,8 @@ updateTable <- function(position, analysis, info, data, result, flag) {
           }
           
           result[[paste0(analysis, "cell_COLOR")]][idx["row"], idx["col"]] <- new_value
-          # if ELISA, modify SN otherwise modify EXP
-          if (analysis == "ELISA") {
+          # if ELISA or CYTOTOX modify SN otherwise modify EXP
+          if (analysis == "ELISA" || analysis == "CYTOTOX") {
             result[[paste0(analysis, "cell_SN")]][idx["row"], idx["col"]] <- new_value
           } else if (analysis == "ENDOC") {
             result[[paste0(analysis, "cell_EXP")]][idx["row"], idx["col"]] <- new_value
@@ -696,7 +738,7 @@ updateTable <- function(position, analysis, info, data, result, flag) {
       }
     }
   } 
-  # change the time column to ENDOC or exp_condition to ELISA  
+  # change the exp_condition column to ENDOC or sample_name to ELISA and CYTOTOX
   else if (selected_col == 5) {
     color_code <- data[selected_row, "ColorCode"]
     req(color_code != "", color_code != "white", color_code != "#FFFFFF")
@@ -721,8 +763,8 @@ updateTable <- function(position, analysis, info, data, result, flag) {
     } else {
       for (i in seq_along(matching_indices[, "row"])) {
         if (!is.na(new_values[i]) && new_values[i] != "" && new_values[i] != "NA") {
-          # if ELISA, modify EXP otherwise modify TIME
-          if (analysis == "ELISA") {
+          # if ELISA or CYTOTOX modify SN otherwise modify EXP
+          if (analysis == "ELISA" || analysis == "CYTOTOX") {
             result[[paste0(analysis, "cell_EXP")]][matching_indices[i, "row"], matching_indices[i, "col"]] <- new_values[i]
           } else {
             result[[paste0(analysis, "cell_TIME")]][matching_indices[i, "row"], matching_indices[i, "col"]] <- new_values[i]
@@ -730,6 +772,38 @@ updateTable <- function(position, analysis, info, data, result, flag) {
         } 
       }
       assign(paste0(analysis_lower, "Result"), result, envir = .GlobalEnv)
+    }
+  # column 6 is used only by cytotoxicity for ReplicateNumber 
+  } else if (selected_col == 6) {
+    color_code <- data[selected_row, "ColorCode"]
+    req(color_code != "", color_code != "white", color_code != "#FFFFFF")
+    
+    analysis_lower <- tolower(analysis)
+    matching_indices <- which(result[[paste0(analysis, "cell_COLOR")]] == color_code, arr.ind = TRUE)
+    num_matches <- nrow(matching_indices)
+    
+    # operation to set the unfilled values to NA and save only the modified position
+    processed_value <- gsub(" -  - ", " - NA - ", new_value)
+    processed_value <- sub("^ - ", "NA - ", processed_value)
+    processed_value <- sub(" - $", " - NA", processed_value)
+    
+    new_values <- strsplit(processed_value, " - ", fixed = TRUE)[[1]]
+    new_values[new_values == ""] <- NA  
+    
+    current_values <- new_values  
+    
+    if (length(new_values) != num_matches) {
+      session$sendCustomMessage(type = "errorNotification", 
+                                message = "Number of values does not match the number of matches.")
+    } else {
+        for (i in seq_along(matching_indices[, "row"])) {
+          if (!is.na(new_values[i]) && new_values[i] != "" && new_values[i] != "NA") {
+            if (analysis == "CYTOTOX") {
+              result[[paste0(analysis, "cell_REP")]][matching_indices[i, "row"], matching_indices[i, "col"]] <- new_values[i]
+          } 
+        }
+        assign(paste0(analysis_lower, "Result"), result, envir = .GlobalEnv)
+      } 
     }
   }
   return(paste("Updated values: ", new_value))

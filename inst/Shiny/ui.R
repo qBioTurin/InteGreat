@@ -732,6 +732,125 @@ ui <- dashboardPage(
       ),
       ## END data analysis: ENDOC
       
+      ## BEGIN data analysis: CYTOTOX  #######
+      tabItem(
+        tabName = "uploadCYTOTOX",
+        h2("Load Cytotoxicity data"),
+        fluidRow(
+              column(9,
+                fileInput(
+                  inputId = "CYTOTOXImport",
+                  label = "",
+                  placeholder = "Select an Excel file.",
+                  width = "80%", 
+                  multiple = TRUE
+                )
+              ),
+              column(2,
+                  actionButton(
+                  label = "Load",
+                  style = "margin-top: 20px; width: 100%;",
+                  icon = shiny::icon("upload"),
+                  inputId = "LoadCYTOTOX_Button"
+                )
+              )
+            ),
+            fluidRow(
+              column(
+                width = 10,offset = 1,
+                verbatimTextOutput("LoadingError_CYTOTOX")
+              )
+            ),
+            fluidRow(
+              box(width = 12,
+                  title = "Assign experimental information to values:",
+                  column(width = 6,
+                         dataTableOutput("CYTOTOXmatrix")
+                  ),
+                  column(width = 6,
+                         selectizeInput("CYTOTOXcell_SN",
+                                        label = "Sample name:",
+                                        choices = "",
+                                        options = list(create = TRUE)),
+                         selectizeInput("CYTOTOXcell_EXP",
+                                        label = "Experimental condition:",
+                                        choices = "",
+                                        options = list(create = TRUE)),
+                         selectizeInput("CYTOTOXcell_REP",
+                                        label = "Replicate number:",
+                                        choices = "",
+                                        options = list(create = TRUE)),
+                         fluidRow(
+                           column(4,
+                                  selectizeInput(inputId = "CYTOTOX_baselines",
+                                                 "Select baseline cell:",
+                                                 choices = "")
+                           )
+                         ),
+                         fluidRow(
+                           column(12,
+                                  tags$div(
+                                    textOutput("CYTOTOXSelectedValues"),
+                                    style = "font-size: 24px; text-align: center; color: green;
+                                             width: 100%; margin-top: 20px;"
+                                  )
+                           )
+                         )
+                  )
+            ),
+            fluidRow(
+              column(12, dataTableOutput("leftTableCytotox")),
+              #column(6, dataTableOutput("rightTableCytotox"))            
+            ),
+            fluidRow(
+              column(width = 1,offset = 9,
+                     actionButton(inputId = "NextCytotoxQuantif",
+                                  label = 'Proceed to Quantification',
+                                  align = "right",
+                                  icon = shiny::icon("forward"))
+              )
+            )
+        )
+      ),
+      # Second tab content
+      tabItem(tabName = "tablesCYTOTOX",
+              h2("Quantification"),
+              # fluidRow(
+              #   box(width= 12,
+              #       title = "Select a baseline for the following experimental conditions",
+              #       collapsible = TRUE,
+              #       collapsed = T,
+              #       uiOutput("CytotoxBaselineSelection")
+              #   )
+              # ),
+              fluidRow(
+                box(width= 12,
+                    title = "Quantification",
+                    collapsible = TRUE,
+                    collapsed = TRUE,
+                    plotOutput("CYTOTOXplots"),
+                    DTOutput("CYTOTOXtables"),
+                    fluidRow(
+                      column(width = 1,
+                             downloadButton( label = "Download the RDs", 
+                                             outputId = "downloadButton_CYTOTOX",
+                                             #href = "Results.RData",
+                                             #download = "Results.RData",
+                                             icon = icon("download") )
+                      ),
+                      column(width = 1,offset = 2,
+                             downloadButton( label = "Download xlsx", 
+                                             outputId = "downloadButtonExcel_CYTOTOX",
+                                             #href = "Results.RData",
+                                             #download = "Results.RData",
+                                             icon = icon("download") )
+                      )
+                    )
+                )
+              )
+      ),
+      ## END data analysis: CYTOTOX
+      
       ## START data analysis: FACS
       tabItem(
         tabName = "uploadFACS",

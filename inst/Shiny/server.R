@@ -1475,7 +1475,12 @@ server <- function(input, output, session) {
     data <- left_data_elisa() 
     updatedText <- updateTable("left", "ELISA", info, data, elisaResult, FlagsELISA)
     
-    output$ELISASelectedValues <- renderText(updatedText)  
+    output$ELISASelectedValues <- renderText(updatedText) 
+    tableExcelColored(session = session,
+                      Result = elisaResult, 
+                      FlagsExp = FlagsELISA,
+                      type = "Update",
+    )
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   observeEvent(input$rightTableElisa_cell_edit, {
@@ -1484,6 +1489,11 @@ server <- function(input, output, session) {
     updatedText <- updateTable("right", "ELISA", info, data, elisaResult, FlagsELISA)
     
     output$ELISASelectedValues <- renderText(updatedText)  
+    tableExcelColored(session = session,
+                      Result = elisaResult, 
+                      FlagsExp = FlagsELISA,
+                      type = "Update",
+    )
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   observeEvent(input$ELISAmatrix_cell_clicked, {
@@ -1804,27 +1814,27 @@ server <- function(input, output, session) {
     elisaResult$data -> data
     
     if(input$ELISA_standcurve != ""){
-      standcurve = data %>%
+      standcurve <- data %>%
         filter(exp %in% input$ELISA_standcurve) %>%
-        select(exp,time,values) %>%
-        rename(Measures = values) %>%
-        mutate(Concentrations = NA )
+        select(exp, time, values) %>%
+        rename(Concentrations = time, Measures = values)
       
       if(!is.null(elisaResult$Tablestandcurve) && 
          all.equal(elisaResult$Tablestandcurve %>% select(-Concentrations),
-                   standcurve  %>% select(-Concentrations) ))
+                   standcurve %>% select(-Concentrations) ))
       {
         standcurve =  elisaResult$Tablestandcurve
       }else{
         elisaResult$Tablestandcurve = standcurve
       }
+      
       print(standcurve)
       output$ELISA_Table_stdcurve <- DT::renderDataTable({
-        DT::datatable( standcurve,
-                       selection = 'none',
-                       editable = list(target = "cell",
-                                       disable = list(columns = 0:2) ),
-                       rownames= FALSE
+        DT::datatable(standcurve,
+                      selection = 'none',
+                      editable = list(target = "cell",
+                                      disable = list(columns = 0:1)),
+                      rownames = FALSE
         )
       })
     } 
@@ -1963,6 +1973,7 @@ server <- function(input, output, session) {
   # })
   
   ### End ELISA analysis ####  
+  
   #### ENDOCYTOSIS analysis ####
   observeEvent(input$NextEndocQuantif,{
     updateTabsetPanel(session, "SideTabs",
@@ -2144,6 +2155,10 @@ server <- function(input, output, session) {
     updatedText <- updateTable("left", "ENDOC", info, data, endocResult, FlagsENDOC)
     
     output$ENDOCSelectedValues <- renderText(updatedText)  
+    tableExcelColored(session = session,
+                      Result = endocResult, 
+                      FlagsExp = FlagsENDOC,
+                      type = "Update")
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   observeEvent(input$rightTableEndoc_cell_edit, {
@@ -2151,6 +2166,10 @@ server <- function(input, output, session) {
     data <- right_data_endoc() 
     updatedText <- updateTable("right", "ENDOC", info, data, endocResult, FlagsENDOC)
     
+    tableExcelColored(session = session,
+                      Result = endocResult, 
+                      FlagsExp = FlagsENDOC,
+                      type = "Update")
     output$ENDOCSelectedValues <- renderText(updatedText)  
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
@@ -2543,12 +2562,385 @@ server <- function(input, output, session) {
       
       } 
   )
-  
   ### End ENDOC analysis ####
   
-  #### CITOXICITY analysis ####
+  ### CYTOTOX analysis ####
   
-  ### End CITOXICITY analysis ####
+  # next buttons
+  observeEvent(input$NextCytotoxQuantif,{
+    updateTabsetPanel(session, "SideTabs",
+                      selected = "tablesCYTOTOX")
+  })
+  #
+  
+  cytotoxResult = reactiveValues(
+    Initdata= NULL,
+    data = NULL,
+    TablePlot = NULL,
+    dataFinal = NULL,
+    CYTOTOXcell_EXP = NULL,
+    CYTOTOXcell_REP = NULL,
+    CYTOTOXcell_SN = NULL,
+    CYTOTOXcell_COLOR = NULL,
+    MapBaseline = NULL)
+  
+  cytotoxResult0 = list(
+    Initdata= NULL,
+    data = NULL,
+    TablePlot = NULL,
+    dataFinal = NULL,
+    CYTOTOXcell_EXP = NULL,
+    CYTOTOXcell_REP = NULL,
+    CYTOTOXcell_SN = NULL,
+    MapBaseline = NULL)
+  
+  # save everytime there is a change in the results
+  CYTOTOXresultListen <- reactive({
+    reactiveValuesToList(cytotoxResult)
+  })
+  observeEvent(CYTOTOXresultListen(), {
+    DataAnalysisModule$cytotoxResult = reactiveValuesToList(cytotoxResult)
+    DataAnalysisModule$cytotoxResult$Flags = reactiveValuesToList(FlagsCYTOTOX)
+  })
+  
+  left_data_cytotox <- reactiveVal()
+  right_data_cytotox <- reactiveVal()
+
+  FlagsCYTOTOX <- reactiveValues(cellCoo = NULL,
+                                 AllExp = "",
+                                 BASEselected = "",
+                                 EXPselected = "",
+                                 EXPcol = NULL)
+ 
+  observeEvent(input$LoadCYTOTOX_Button,{
+    alert$alertContext <- "CYTOTOX-reset"
+    if(!is.null(cytotoxResult$Initdata) ) {
+      shinyalert(
+        title = "Important message",
+        text = "Do you want to update the CYTOTOX data already present, by resetting the previous analysis?",
+        type = "warning",
+        showCancelButton = TRUE,
+        confirmButtonText = "Update",
+        cancelButtonText = "Cancel",
+      )
+    } else loadExcelFileCYTOTOX()
+  })
+  
+  observeEvent(input$shinyalert, {
+    removeModal()
+    if (input$shinyalert && alert$alertContext == "CYTOTOX-reset") {  
+      resetPanel("CYTOTOX", flags = FlagsCYTOTOX, result = cytotoxResult)
+      left_data_cytotox <- NULL
+      
+      loadExcelFileCYTOTOX()
+    }
+  })
+  
+  loadExcelFileCYTOTOX <- function() {
+    alert$alertContext <- ""
+    
+    mess = readfile(
+      filename = input$CYTOTOXImport$datapath,
+      isFileUploaded = !is.null(input$CYTOTOXImport) && file.exists(input$CYTOTOXImport$datapath),
+      type = "Excel",
+      allDouble = T,
+      colname = F,
+      colors = T
+    )
+    
+    cytotoxResult$Initdata = mess$x
+    FlagsCYTOTOX$EXPcol = mess$fill
+    cytotoxResult$CYTOTOXcell_COLOR = mess$SNtable
+    cytotoxResult$CYTOTOXcell_SN <- matrix("", nrow = nrow(cytotoxResult$CYTOTOXcell_COLOR), ncol = ncol(cytotoxResult$CYTOTOXcell_COLOR))
+
+    showAlert("Success", "The CYTOTOX excel has been uploaded with success", "success", 2000)
+  }
+  
+  observe({
+    if( !is.null(cytotoxResult$Initdata) && is.null(cytotoxResult$TablePlot) ){
+      tableExcelColored(session = session,
+                        Result = cytotoxResult, 
+                        FlagsExp = FlagsCYTOTOX,
+                        type = "Initialize")
+      
+      output$CYTOTOXmatrix <-renderDataTable({cytotoxResult$TablePlot})
+    }
+  })
+  
+  observe({
+    color_codes <- FlagsCYTOTOX$EXPcol
+    color_names <- names(FlagsCYTOTOX$EXPcol)
+    
+    valid_colors <- color_codes != "white"
+    color_codes <- color_codes[valid_colors]
+    color_names <- color_names[valid_colors]
+    
+    mid_point <- ceiling(length(color_codes) / 2)
+    left_colors <- color_codes[1:length(color_codes)]
+    right_colors <- color_codes[(mid_point+1):length(color_codes)]
+    
+    left_formatted_data <- get_formatted_data(left_colors, color_names[1:length(color_codes)], cytotoxResult, cytotoxResult$CYTOTOXcell_EXP, "CYTOTOX")
+    #right_formatted_data <- get_formatted_data(right_colors, color_names[(mid_point+1):length(color_codes)], cytotoxResult, cytotoxResult$CYTOTOXcell_EXP, "CYTOTOX")
+    
+    left_data_cytotox(left_formatted_data)
+    #right_data_cytotox(right_formatted_data)
+    
+    output$leftTableCytotox <- renderDataTable(
+      left_data_cytotox(), 
+      escape = FALSE, 
+      editable = list(target = "cell", disable = list(columns = 0:3)),
+      options = list(
+        dom = 't',
+        paging = FALSE,
+        info = FALSE,
+        searching = FALSE, 
+        columnDefs = list(
+          list(targets = 0, visible = FALSE),
+          list(targets = 1, visible = FALSE),
+          list(width = '10px', targets = 2),
+          list(width = '180px', targets = 3),
+          list(width = '150px', targets = 4),
+          list(width = '200px', targets = 5),
+          list(width = '200px', targets = 6),
+          list(className = 'dt-head-left dt-body-left', targets = 1)
+        )
+      )
+    )
+  })
+  
+  observeEvent(input$leftTableCytotox_cell_edit, {
+    info <- input$leftTableCytotox_cell_edit
+    data <- left_data_cytotox() 
+    updatedText <- updateTable("left", "CYTOTOX", info, data, cytotoxResult, FlagsCYTOTOX)
+    
+    output$CYTOTOXSelectedValues <- renderText(updatedText)  
+    
+    tableExcelColored(session = session,
+                      Result = cytotoxResult, 
+                      FlagsExp = FlagsCYTOTOX,
+                      type = "Update",
+    )
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  observeEvent(input$CYTOTOXmatrix_cell_clicked,{
+    req(input$CYTOTOXmatrix_cell_clicked)  
+
+    cellSelected= as.numeric(input$CYTOTOXmatrix_cell_clicked)
+    FlagsCYTOTOX$cellCoo = cellCoo = c(cellSelected[1],cellSelected[2] + 1)
+     
+    allExp <- unique(na.omit(c(cytotoxResult$CYTOTOXcell_EXP)))  
+    selectedExp <- ifelse(is.null(cytotoxResult$CYTOTOXcell_EXP[cellCoo[1], cellCoo[2]]), "", cytotoxResult$CYTOTOXcell_EXP[cellCoo[1], cellCoo[2]])
+
+    updateSelectizeInput(inputId = "CYTOTOXcell_EXP",
+                         choices = allExp,
+                         selected = selectedExp)
+    
+    allSN <- unique(na.omit(c(cytotoxResult$CYTOTOXcell_SN)))  
+    selectedSN <- ifelse(is.null(cytotoxResult$CYTOTOXcell_SN[cellCoo[1], cellCoo[2]]), "", cytotoxResult$CYTOTOXcell_SN[cellCoo[1], cellCoo[2]])
+
+    updateSelectizeInput(inputId = "CYTOTOXcell_SN",
+                         choices = allSN,
+                         selected = selectedSN)
+    
+    allREP <- unique(na.omit(c(cytotoxResult$CYTOTOXcell_REP)))  
+    selectedREP <- ifelse(is.null(cytotoxResult$CYTOTOXcell_REP[cellCoo[1], cellCoo[2]]), "", cytotoxResult$CYTOTOXcell_REP[cellCoo[1], cellCoo[2]])
+
+    updateSelectizeInput(inputId = "CYTOTOXcell_REP",
+                         choices = allREP,
+                         selected = selectedREP)
+  })
+  
+  observeEvent(input$CYTOTOXcell_EXP,{
+    if (!is.null(cytotoxResult$CYTOTOXcell_EXP) && !is.null(FlagsCYTOTOX$cellCoo) && !anyNA(FlagsCYTOTOX$cellCoo)) {
+      CYTOTOXtb = cytotoxResult$TablePlot
+      cellCoo = FlagsCYTOTOX$cellCoo
+      
+      value.bef = cytotoxResult$CYTOTOXcell_EXP[cellCoo[1], cellCoo[2]] 
+      value.now = input$CYTOTOXcell_EXP
+      
+      if (value.now != "" && value.now != value.bef) {
+        currentValues <- cytotoxResult$Initdata[cellCoo[1], cellCoo[2]]
+        
+        cytotoxResult$CYTOTOXcell_EXP[cellCoo[1], cellCoo[2]] = value.now
+        tableExcelColored(session = session,
+                          Result = cytotoxResult, 
+                          FlagsExp = FlagsCYTOTOX,
+                          type = "Update",
+        )
+        
+        output$CYTOTOXSelectedValues <- renderText(paste("Updated value", paste(currentValues), ": time ", value.now))
+        output$CYTOTOXmatrix <- renderDataTable({cytotoxResult$TablePlot})
+      }
+    }  else return()
+  }, ignoreInit = TRUE)
+  
+  observeEvent(input$CYTOTOXcell_REP,{
+    if (!is.null(cytotoxResult$CYTOTOXcell_REP) && !is.null(FlagsCYTOTOX$cellCoo) && !anyNA(FlagsCYTOTOX$cellCoo)) {
+      CYTOTOXtb = cytotoxResult$TablePlot
+      cellCoo = FlagsCYTOTOX$cellCoo
+      
+      value.bef = cytotoxResult$CYTOTOXcell_REP[cellCoo[1], cellCoo[2]] 
+      value.now = input$CYTOTOXcell_REP
+      
+      if (value.now != "" && value.now != value.bef) {
+        currentValues <- cytotoxResult$Initdata[cellCoo[1], cellCoo[2]]
+        cytotoxResult$CYTOTOXcell_REP[cellCoo[1], cellCoo[2]] = value.now
+        
+        tableExcelColored(session = session,
+                          Result = cytotoxResult, 
+                          FlagsExp = FlagsCYTOTOX,
+                          type = "Update",
+        )
+      
+        output$CYTOTOXSelectedValues <- renderText(paste("Updated value", paste(currentValues), ": time ", value.now))
+        output$CYTOTOXmatrix <- renderDataTable({cytotoxResult$TablePlot})    
+      }
+    }else return()
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$CYTOTOXcell_SN,{
+    if (!is.null(cytotoxResult$CYTOTOXcell_COLOR) && !is.null(FlagsCYTOTOX$cellCoo) && !anyNA(FlagsCYTOTOX$cellCoo)) {
+      CYTOTOXtb = cytotoxResult$TablePlot
+      cellCoo = FlagsCYTOTOX$cellCoo
+      
+      value.bef = cytotoxResult$CYTOTOXcell_SN[cellCoo[1],cellCoo[2]] 
+      value.now = input$CYTOTOXcell_SN
+      
+      if (value.now != "" && value.now != value.bef) {
+        currentValues <- cytotoxResult$Initdata[cellCoo[1], cellCoo[2]]
+        
+        cytotoxResult$CYTOTOXcell_COLOR[cellCoo[1], cellCoo[2]] = value.now
+        cytotoxResult$CYTOTOXcell_SN[cellCoo[1],cellCoo[2]] = value.now
+        CYTOTOXtb$x$data[cellCoo[1],paste0("Col",cellCoo[2])] = value.now
+          
+        if(! input$CYTOTOXcell_SN %in% FlagsCYTOTOX$AllExp){
+          exp = unique(c(FlagsCYTOTOX$AllExp,input$CYTOTOXcell_SN))
+          FlagsCYTOTOX$AllExp = exp
+        }
+          
+          ## updating table and colors definition depending on the cell fill 
+        tableExcelColored(session = session,
+                          Result = cytotoxResult, 
+                          FlagsExp = FlagsCYTOTOX,
+                          type = "Update")
+
+        output$CYTOTOXSelectedValues <- renderText(paste("Updated value", paste(currentValues), ": sample name ", value.now))
+        output$CYTOTOXmatrix <-renderDataTable({cytotoxResult$TablePlot})
+      }
+    } else return()
+  }, ignoreInit = TRUE)
+  
+  ## update Baselines checkBox
+  observeEvent(FlagsCYTOTOX$AllExp,{
+    if(length(FlagsCYTOTOX$AllExp) > 1){
+      exp = FlagsCYTOTOX$AllExp
+      exp = exp[exp != ""]
+      
+      exp_selec = input$CYTOTOX_baselines
+      
+      updateSelectizeInput(session,"CYTOTOX_baselines",
+                           choices = exp,
+                           selected = FlagsCYTOTOX$BASEselected )
+    }
+  })
+  
+  ## select the baselines
+  observeEvent(input$CYTOTOX_baselines,{
+    FlagsCYTOTOX$BASEselected = input$CYTOTOX_baselines
+    FlagsCYTOTOX$EXPselected = FlagsCYTOTOX$AllExp[! FlagsCYTOTOX$AllExp %in% FlagsCYTOTOX$BASEselected]
+  },ignoreNULL = F)
+  
+  toListen_cytotox <- reactive({
+    return( list(cytotoxResult$CYTOTOXcell_EXP,cytotoxResult$CYTOTOXcell_SN,FlagsCYTOTOX$BASEselected) )
+  })
+  observeEvent(toListen_cytotox(),{
+    baselines = FlagsCYTOTOX$BASEselected
+    baselines = baselines[baselines != ""]
+    if(length(baselines) > 0 )
+    {
+      CYTOTOXcell_value = data.frame(
+        row = c(t(row(cytotoxResult$Initdata))),
+        col = c(t(col(cytotoxResult$Initdata))),
+        Val = c(t(cytotoxResult$Initdata))
+      ) 
+      CYTOTOXcell_SN = data.frame(
+        row = c(t(row(cytotoxResult$CYTOTOXcell_SN))),
+        col = c(t(col(cytotoxResult$CYTOTOXcell_SN))),
+        SN = c(t(cytotoxResult$CYTOTOXcell_SN))
+      ) 
+      CYTOTOXcell_EXP = data.frame(
+        row = c(t(row(cytotoxResult$CYTOTOXcell_EXP))),
+        col = c(t(col(cytotoxResult$CYTOTOXcell_EXP))),
+        EXP = c(t(cytotoxResult$CYTOTOXcell_EXP))
+      ) 
+      CYTOTOXcell_REP = data.frame(
+        row = c(t(row(cytotoxResult$CYTOTOXcell_REP))),
+        col = c(t(col(cytotoxResult$CYTOTOXcell_REP))),
+        REP = c(t(cytotoxResult$CYTOTOXcell_REP))
+      ) 
+      
+      CYTOTOXcell = merge(merge(merge(CYTOTOXcell_REP,CYTOTOXcell_EXP) , CYTOTOXcell_SN), CYTOTOXcell_value) %>%
+        group_by(SN,EXP,REP) %>%
+        summarise(MeanV = mean(Val,na.rm = T)) %>%
+        ungroup()
+      
+      CYTOTOXcell_base = CYTOTOXcell %>%
+        filter(SN == baselines) %>%
+        rename(MeanBaseV = MeanV, Baseline = SN) 
+      # if no exp conditions is used for the baseline then we repeat  exp given for the other SN
+      # in thius way the same baseline is used for each SN
+      if(all(CYTOTOXcell_base$EXP == "") ) {
+        CYTOTOXcell_base = do.call("rbind", lapply(unique(CYTOTOXcell$EXP), function(x) CYTOTOXcell_base %>% mutate(EXP = x) ) )
+      }
+      
+      CYTOTOXcell = CYTOTOXcell %>%  filter(SN != baselines)
+      CYTOTOXcell = merge(CYTOTOXcell_base,CYTOTOXcell,by= c("REP","EXP"),all.y = T)
+      CYTOTOXcell = CYTOTOXcell %>% mutate(Res = (MeanV-MeanBaseV)/(100-MeanBaseV)*100)
+      
+      cytotoxResult$data =  CYTOTOXcell
+      cytotoxResult$dataFinal =  CYTOTOXcell %>%
+        select(-Baseline, - MeanBaseV, - MeanV ) %>%
+        tidyr::spread(key= "REP", value = "Res") %>%
+        rename(`Sample Name` = SN,
+               `Experimental Condition` = EXP)
+      
+      output$CYTOTOXtables = renderDT({
+        datatable(
+          cytotoxResult$dataFinal,
+          rownames= FALSE,
+          options = list(
+            scrollX = TRUE,
+            lengthChange = FALSE,
+            dom = 't')
+        )
+      })
+      
+      output$CYTOTOXplots = renderPlot({
+        pl1 = CYTOTOXcell %>%
+          group_by(EXP,SN) %>%
+          summarize(Mean = mean(MeanV),SD = sd(MeanV)) %>%
+          ggplot(aes(x = as.factor(EXP),y = Mean ,fill = SN, col = SN)) + 
+          geom_bar(stat="identity", color="black", position=position_dodge()) +
+          geom_errorbar(aes(ymin=Mean-SD, ymax=Mean+SD), width=.2,
+                        position=position_dodge(.9)) +
+          theme_bw()+ 
+          theme(legend.position = "bottom")+
+          labs(title = "Sample Name mean values with standard deviation bars",
+               col="Sample Name",fill="Sample Name",
+               x = "Experimental condition", y= "Mean Values")
+        
+        pl2 = CYTOTOXcell %>% ggplot() +
+          geom_boxplot(aes(x = as.factor(EXP),y = Res,fill = SN, col = SN),alpha = 0.4) +
+          theme_bw() + theme(legend.position = "bottom") +
+          labs(x = "Experimental condition", y= "% Values w.r.t \nthe baseline cell death",
+               col="Sample Name",fill="Sample Name")
+        pl1+pl2
+      })
+      
+    }
+  })
+  
+  ### End CYTOTOX analysis ####
   
   #### FACS analysis ####
   facsResult = reactiveValues(
@@ -2957,7 +3349,6 @@ server <- function(input, output, session) {
     
     new_data <- do.call(rbind, processed_data)
     
-    # Controlla e aggiorna i nomi
     current_names <- FlagsFACS$data$Name
     if (!is.null(facsResult$data)) {
       facsResult$data$Name <- current_names
@@ -2975,7 +3366,6 @@ server <- function(input, output, session) {
       }
     }
     
-    # Controllo per rimuovere colonne duplicate se i dati sono identici
     existing_column_names <- names(facsResult$data)
     for (col_name in existing_column_names) {
       if (col_name != new_column_name && all(facsResult$data[[col_name]] == facsResult$data[[new_column_name]])) {
