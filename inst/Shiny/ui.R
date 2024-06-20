@@ -554,7 +554,7 @@ ui <- dashboardPage(
                                    tags$style(HTML("
                                              #ELISA_buttonRegression {
                                                margin-top: 25px;
-                                               margin-left: 20px;
+                                               margin-left: 70px;
                                              }
                                              ")),
                                    actionButton(inputId = "ELISA_buttonRegression",

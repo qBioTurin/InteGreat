@@ -1479,8 +1479,7 @@ server <- function(input, output, session) {
     tableExcelColored(session = session,
                       Result = elisaResult, 
                       FlagsExp = FlagsELISA,
-                      type = "Update",
-    )
+                      type = "Update")
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   observeEvent(input$rightTableElisa_cell_edit, {
@@ -3026,7 +3025,7 @@ server <- function(input, output, session) {
   FlagsFACS <- reactiveValues(
     actualLevel = NULL,
     allLevel = NULL,
-    actualPath = NULL
+    actualPath = NULL,
   )
   
   observeEvent(input$LoadFACS_Button,{
@@ -3319,7 +3318,6 @@ server <- function(input, output, session) {
     shinyjs::runjs(paste0('setTimeout(function() { $("#', nextDivId, '").css("display", "block"); }, 200);'))
   }
   
-  
   observe({
     if (is.null(facsResult$depthCount) || length(facsResult$depthCount) == 0) {
       numLevels <- 0
@@ -3537,9 +3535,8 @@ server <- function(input, output, session) {
       }
     })
     
-    
     FlagsFACS$actualPath <- gsub(old_name, new_value, FlagsFACS$actualPath)
-
+    
     facsResult$columnName[row, "Name"] <- new_value
     facsResult$columnName[row, "New_name"] <- "-"
     
@@ -3561,6 +3558,140 @@ server <- function(input, output, session) {
   
   
   ### End FACS analysis ####
+  
+  ### load generic analysis
+  ### Loading files ####
+  UploadDataAnalysisModuleAllFalse  = reactiveValues(FlagALL = F,
+                                                     FlagUpdate = F,
+                                                     FlagWB = F,
+                                                     FlagPRCC = F,
+                                                     FlagELISA = F,
+                                                     FlagCYTOTOX = F,
+                                                     FlagENDOC = F,
+                                                     FlagFACS = F)
+  
+  UploadDataAnalysisModule = reactiveValues(FlagALL = F,
+                                            FlagUpdate = F,
+                                            FlagWB = F,
+                                            FlagPRCC = F,
+                                            FlagELISA = F,
+                                            FlagCYTOTOX = F,
+                                            FlagENDOC = F,
+                                            FlagFACS = F)
+  
+  observeEvent(input$loadAnalysis_Button, {
+    manageSpinner(TRUE)
+    if (is.null(input$loadAnalysis_file) || !all(file.exists(input$loadAnalysis_file$datapath))) {
+      manageSpinner(FALSE)
+      showAlert("Error", "Please select one RDs file generated through the Data Analysis module.", "error", 2000)
+      return(NULL)
+    }
+    
+    mess <- readRDS(input$loadAnalysis_file$datapath)
+    
+    messNames <- names(mess)
+    if ("Flags" %in% messNames) messNames <- messNames[messNames != "Flags"]
+    
+    if (!(all(messNames %in% names(DataAnalysisModule)) ||
+          all(messNames %in% names(elisaResult)) ||
+          all(messNames %in% names(wbResult)) || 
+          all(messNames %in% names(pcrResult)) ||
+          all(messNames %in% names(cytotoxResult)) ||
+          all(messNames %in% names(endocResult)) ||
+          all(messNames %in% names(facsResult)))) {
+      manageSpinner(FALSE)
+      showAlert("Error", paste(mess[["message"]], "\n The file must be RDs saved through the Data Analysis module."), "error", 2000)
+      return(NULL)
+    }
+    
+    if (all(messNames %in% names(DataAnalysisModule))) {
+      DataAnalysisModule <- mess
+      UploadDataAnalysisModule$FlagALL <- TRUE
+    } else if (all(messNames %in% names(wbResult))) {
+      DataAnalysisModule$wbResult <- mess
+      UploadDataAnalysisModule$FlagWB <- TRUE
+    } else if (all(messNames %in% names(pcrResult))) {
+      DataAnalysisModule$pcrResult <- mess
+      UploadDataAnalysisModule$FlagPRCC <- TRUE
+    } else if (all(messNames %in% names(endocResult))) {
+      DataAnalysisModule$endocResult <- mess
+      UploadDataAnalysisModule$FlagENDOC <- TRUE
+    } else if (all(messNames %in% names(elisaResult))) {
+      DataAnalysisModule$elisaResult <- mess
+      UploadDataAnalysisModule$FlagELISA <- TRUE
+    } else if (all(messNames %in% names(cytotoxResult))) {
+      DataAnalysisModule$cytotoxResult <- mess
+      UploadDataAnalysisModule$FlagCYTOTOX <- TRUE
+    } else if (all(messNames %in% names(facsResult))) {
+      DataAnalysisModule$facsResult <- mess
+      UploadDataAnalysisModule$FlagFACS <- TRUE
+    }
+    
+    UploadDataAnalysisModule$FlagUpdate <- TRUE
+    
+    manageSpinner(FALSE)
+    showAlert("Success", "The RDs file has been uploaded with success.", "success", 2000)
+  })
+  
+  observeEvent(UploadDataAnalysisModule$FlagUpdate,{
+    if(UploadDataAnalysisModule$FlagUpdate){
+      
+      if(UploadDataAnalysisModule$FlagWB || UploadDataAnalysisModule$FlagALL){
+        UploadRDs(Flag = "WB",
+                  session = session,
+                  output = output,
+                  DataAnalysisModule = DataAnalysisModule,
+                  Result = wbResult, 
+                  FlagsExp = Flags,
+                  PanelStructures = PanelStructures)
+      }
+      else if(UploadDataAnalysisModule$FlagPRCC || UploadDataAnalysisModule$FlagALL){
+        UploadRDs(Flag = "PRCC",
+                  session = session,
+                  output = output,
+                  DataAnalysisModule = DataAnalysisModule,
+                  Result = prccResult, 
+                  FlagsExp = FlagsPRCC)
+      }
+      else if(UploadDataAnalysisModule$FlagENDOC || UploadDataAnalysisModule$FlagALL){
+        UploadRDs(Flag = "ENDOC",
+                  session = session,
+                  output = output,
+                  DataAnalysisModule = DataAnalysisModule,
+                  Result = endocResult, 
+                  FlagsExp = FlagsENDOC)
+      }
+      else if(UploadDataAnalysisModule$FlagELISA || UploadDataAnalysisModule$FlagALL){
+        UploadRDs(Flag = "ELISA",
+                  session = session,
+                  output = output,
+                  DataAnalysisModule = DataAnalysisModule,
+                  Result = elisaResult, 
+                  FlagsExp = FlagsELISA)
+        
+      }
+      else if(UploadDataAnalysisModule$FlagCYTOTOX || UploadDataAnalysisModule$FlagALL){
+        UploadRDs(Flag = "CYTOTOX",
+                  session = session,
+                  output = output,
+                  DataAnalysisModule = DataAnalysisModule,
+                  Result = cytotoxResult, 
+                  FlagsExp = FlagsCYTOTOX)
+        
+      }
+      else if(UploadDataAnalysisModule$FlagFACS || UploadDataAnalysisModule$FlagALL){
+        UploadRDs(Flag = "FACS",
+                  session = session,
+                  output = output,
+                  DataAnalysisModule = DataAnalysisModule,
+                  Result = facsResult, 
+                  FlagsExp = FlagsFACS)
+        
+      }
+      
+      UploadDataAnalysisModule = UploadDataAnalysisModuleAllFalse
+    }
+  })
   
   #start statistics
   DataStatisticModule = reactiveValues(WB = list(),
@@ -3680,18 +3811,6 @@ server <- function(input, output, session) {
   
   ### End Statistic ####
   
-  
-  #----------------------------------------------------------------------------------
-  # OTHER ANALYSIS TO DO
-  cytotoxResult  = reactiveValues(
-    Initdata= NULL,
-    data = NULL,
-    TablePlot = NULL,
-    dataFinal = NULL,
-    CYTOTOXcell_EXP = NULL,
-    CYTOTOXcell_REP = NULL,
-    CYTOTOXcell_SN = NULL,
-    MapBaseline = NULL)
   
   # DOWNLOAD REPORT E RDS
   output$downloadReport <- downloadHandler(

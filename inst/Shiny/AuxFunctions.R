@@ -869,3 +869,286 @@ updateTable <- function(position, analysis, info, data, result, flag) {
   }
   return(paste("Updated values: ", new_value))
 }
+
+UploadRDs <- function(Flag, session, output, DataAnalysisModule, Result, FlagsExp, PanelStructures = NULL) {
+  switch(Flag,
+         "WB" = {
+           for (nameList in names(Result)) 
+             Result[[nameList]] <- DataAnalysisModule$wbResult[[nameList]]
+           
+           for (nameList in names(DataAnalysisModule$wbResult$Flags)) 
+             FlagsExp[[nameList]] <- DataAnalysisModule$wbResult$Flags[[nameList]]
+           
+           if (!is.null(Result$Im)) {
+             im <- Result$Im$WB
+             output$TifPlot2 <- renderPlot({
+               plot(c(1, dim(im)[2]), c(1, dim(im)[1]), type = 'n', ann = FALSE)
+               rasterImage(im, 1, 1, dim(im)[2], dim(im)[1])
+               if (nrow(Result$Planes) > 0) {
+                 r <- Result$Planes
+                 rect(r$xmin, r$ymin, r$xmax, r$ymax, border = "red")
+               }
+             })
+             
+             output$PlanesStructureTable <- renderDT(
+               Result$Planes,
+               server = FALSE,
+               editable = list(target = "cell", disable = list(columns = 1:4)),
+               options = list(lengthChange = FALSE, autoWidth = TRUE),
+               rownames = FALSE
+             )
+             
+             PanelStructures$data <- Result$Planes
+           }
+           
+           if (!is.null(Result$PanelsValue)) {
+             updateSelectInput(session = session, "LaneChoice",
+                               choices = unique(Result$PanelsValue$ID),
+                               selected = ""
+             )
+           }
+           
+           if (!is.null(Result$TruncatedPlots)) {
+             output$DataPlot <- renderPlot({ Result$TruncatedPlots })
+             FlagsExp$LanesCut <- TRUE
+           } else if (!is.null(Result$Plots)) {
+             output$DataPlot <- renderPlot({ Result$Plots })
+             FlagsExp$LanesCut <- TRUE
+           }
+           
+           output$AUC <- renderDT({
+             Result$AUCdf %>% 
+               dplyr::select(SampleName, Truncation, AUC)
+           },
+           selection = 'none',
+           rownames = FALSE
+           )
+           
+           updateTabsetPanel(session = session, "SideTabs",
+                             selected = "grey")
+         },
+         "PRCC" = {
+           for (nameList in names(DataAnalysisModule$pcrResult)) 
+             Result[[nameList]] <- DataAnalysisModule$pcrResult[[nameList]]
+           
+           for (nameList in names(DataAnalysisModule$pcrResult$Flags)) 
+             FlagsExp[[nameList]] <- DataAnalysisModule$pcrResult$Flags[[nameList]]
+           
+           choices <- ""
+           selected <- rep("", 3)
+           
+           if (!is.null(Result$Initdata)) {
+             choices <- c("", colnames(Result$Initdata))
+           }
+           
+           if (!is.null(Result$selectPCRcolumns)) {
+             selected <- Result$selectPCRcolumns
+           }
+           
+           updateSelectInput(session = session, "PCR_gene",
+                             choices = choices,
+                             selected = selected[1]
+           )
+           updateSelectInput(session = session, "PCR_sample",
+                             choices = choices,
+                             selected = selected[2]
+           )
+           updateSelectInput(session = session, "PCR_value",
+                             choices = choices,
+                             selected = selected[3]
+           )
+           
+           if (!is.null(Result$PCRnorm))
+             FlagsExp$norm <- TRUE
+           
+           if (!is.null(Result$PCRbaseline))
+             FlagsExp$baseline <- TRUE
+           
+           updateTabsetPanel(session = session, "SideTabs",
+                             selected = "uploadPCR")
+         },
+         
+         "ENDOC" = {
+           for (nameList in names(DataAnalysisModule$endocResult)) 
+             Result[[nameList]] <- DataAnalysisModule$endocResult[[nameList]]
+           
+           for (nameList in names(DataAnalysisModule$endocResult$Flags)) 
+             FlagsExp[[nameList]] <- DataAnalysisModule$endocResult$Flags[[nameList]]
+           
+           if (!is.null(Result$TablePlot)) {
+             output$ENDOCmatrix <- renderDT(
+               Result$TablePlot,
+               server = FALSE
+             )
+           }
+           
+           if (!is.null(Result$ENDOCcell_TIME)) {
+             updateSelectizeInput(inputId = "ENDOCcell_TIME", session = session,
+                                  choices = unique(c(Result$ENDOCcell_TIME))
+             )
+             
+             updateSelectizeInput(inputId = "ENDOCcell_SN", session = session,
+                                  choices = unique(c(Result$ENDOCcell_SN))
+             )
+             
+             FlagsExp$AllExp <- unique(c(Result$ENDOCcell_SN))
+           }
+           
+           tableExcelColored(session = session,
+                             Result = Result, 
+                             FlagsExp = FlagsExp,
+                             type = "Update")
+           
+           updateTabsetPanel(session = session, "SideTabs",
+                             selected = "uploadENDOC")
+         },
+         "ELISA" = {
+           for (nameList in names(DataAnalysisModule$elisaResult)) 
+             Result[[nameList]] <- DataAnalysisModule$elisaResult[[nameList]]
+           
+           for (nameList in names(DataAnalysisModule$elisaResult$Flags)) 
+             FlagsExp[[nameList]] <- DataAnalysisModule$elisaResult$Flags[[nameList]]
+           
+           if (!is.null(Result$TablePlot)) {
+             output$ELISAmatrix <- renderDT(
+               Result$TablePlot,
+               server = FALSE
+             )
+           }
+           
+           if (!is.null(Result$ELISAcell_EXP)) {
+             updateSelectizeInput(inputId = "ELISAcell_EXP",
+                                  session = session,
+                                  choices = unique(c(Result$ELISAcell_EXP))
+             )
+             
+             updateSelectizeInput(inputId = "ELISAcell_SN",
+                                  session = session,
+                                  choices = unique(c(Result$ELISAcell_SN))
+             )
+             
+             FlagsExp$AllExp <- unique(c(Result$ELISAcell_SN))
+           }
+           if (!is.null(Result$MapBaseline)) {
+             FlagsExp$BASEselected <- unique(Result$MapBaseline$Baseline)
+           }
+           if (!is.null(Result$MapBlanche)) {
+             FlagsExp$BLANCHEselected <- unique(Result$MapBlanche$Blanche)
+           }
+           if (!is.null(Result$Tablestandcurve)) {
+             output$ELISA_Table_stdcurve <- DT::renderDataTable({
+               DT::datatable(Result$Tablestandcurve,
+                             selection = 'none',
+                             editable = list(target = "cell", disable = list(columns = 0:2)),
+                             options = list(lengthChange = FALSE, autoWidth = TRUE),
+                             rownames = FALSE
+               )
+             })
+             
+             if (length(FlagsExp$AllExp) > 1) {
+               exp <- FlagsExp$AllExp
+               exp <- exp[exp != ""]
+               
+               bool.tmp <- exp %in% unique(c(FlagsExp$BLANCHEselected, FlagsExp$BASEselected))
+               if (length(bool.tmp) > 0)
+                 exp <- exp[!bool.tmp]
+               
+               updateSelectizeInput(session = session,
+                                    inputId = "ELISA_standcurve",
+                                    choices = exp,
+                                    selected = unique(Result$Tablestandcurve$exp)
+               )
+               
+               FlagsExp$STDCselected <- unique(Result$Tablestandcurve$exp)
+             }
+           }
+           
+           if (!is.null(FlagsExp$BLANCHEselected)) {
+             exp <- FlagsExp$AllExp
+             exp <- exp[exp != ""]
+             
+             bool.tmp <- exp %in% unique(c(FlagsExp$STDselected, FlagsExp$BASEselected))
+             if (length(bool.tmp) > 0)
+               exp <- exp[!bool.tmp]
+             
+             updateCheckboxGroupInput(session = session,
+                                      inputId = "ELISA_blanches",
+                                      choices = exp,
+                                      selected = unique(FlagsExp$BLANCHEselected)
+             )
+           }
+           if (!is.null(FlagsExp$BASEselected)) {
+             exp <- FlagsExp$AllExp
+             exp <- exp[exp != ""]
+             
+             bool.tmp <- exp %in% unique(c(FlagsExp$STDselected, FlagsExp$BLANCHEselected))
+             if (length(bool.tmp) > 0)
+               exp <- exp[!bool.tmp]
+             
+             updateCheckboxGroupInput(session = session,
+                                      inputId = "ELISA_baselines",
+                                      choices = exp,
+                                      selected = unique(FlagsExp$BASEselected)
+             )
+           }
+           if (!is.null(Result$Regression)) {
+             lmStancurve <- Result$Regression$data
+             standcurve <- Result$Tablestandcurve
+             
+             output$ELISAregression <- renderPlot(
+               Result$Regression$plot
+             )
+           }
+           
+           tableExcelColored(session = session,
+                             Result = Result, 
+                             FlagsExp = FlagsExp,
+                             type = "Update")
+                             
+           updateTabsetPanel(session = session, "SideTabs",
+                             selected = "uploadELISA")
+         },
+         "CYTOTOX" = {
+           for (nameList in names(DataAnalysisModule$cytotoxResult)) 
+             Result[[nameList]] <- DataAnalysisModule$cytotoxResult[[nameList]]
+           
+           for (nameList in names(DataAnalysisModule$cytotoxResult$Flags)) 
+             FlagsExp[[nameList]] <- DataAnalysisModule$cytotoxResult$Flags[[nameList]]
+           
+           if (!is.null(Result$TablePlot)) {
+             output$CYTOTOXmatrix <- renderDT(
+               Result$TablePlot,
+               server = FALSE
+             )
+           }
+           
+           if (!is.null(Result$CYTOTOXcell_EXP)) {
+             updateSelectizeInput(inputId = "CYTOTOXcell_EXP",
+                                  session = session,
+                                  choices = unique(c(Result$CYTOTOXcell_EXP))
+             )
+             
+             updateSelectizeInput(inputId = "CYTOTOXcell_SN",
+                                  session = session,
+                                  choices = unique(c(Result$CYTOTOXcell_SN))
+             )
+             updateSelectizeInput(inputId = "CYTOTOXcell_REP",
+                                  session = session,
+                                  choices = unique(c(Result$CYTOTOXcell_REP))
+             )
+             # FlagsExp$AllExp = unique(c(Result$CYTOTOXcell_SN))
+           }
+           
+           tableExcelColored(session = session,
+                             Result = Result, 
+                             FlagsExp = FlagsExp,
+                             type = "Update")
+          
+           updateTabsetPanel(session = session, "SideTabs",
+                             selected = "uploadCYTOTOX")
+         },
+         "FACS" = {
+           
+         }
+  )
+}
