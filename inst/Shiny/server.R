@@ -1964,6 +1964,30 @@ server <- function(input, output, session) {
     output$ELISAregression <- renderPlot(regressionPlot)
   })
   
+  output$downloadElisaAnalysis <- downloadHandler(
+    filename = function() {
+      paste('ELISAanalysis-', Sys.Date(), '.zip', sep='')
+    },
+    content = function(file) {
+      manageSpinner(TRUE)
+      
+      tempDir <- tempdir()
+      nomeRDS <- paste0("ELISA_analysis-", Sys.Date(), ".rds")
+      nomeXLSX <- paste0("ELISA_analysis-", Sys.Date(), ".xlsx")
+      
+      tempRdsPath <- file.path(tempDir, nomeRDS)
+      tempXlsxPath <- file.path(tempDir, nomeXLSX)
+      
+      results <- elisaResult
+      saveRDS(results, file = tempRdsPath)
+      
+      saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "ELISA")
+      
+      zip(file, files = c(tempRdsPath, tempXlsxPath), flags = "-j")
+      manageSpinner(FALSE)
+    } 
+  )
+  
   # save everytime there is a change in the results
   # ELISAresultListen <- reactive({
   #   reactiveValuesToList(elisaResult)
@@ -2939,6 +2963,30 @@ server <- function(input, output, session) {
       
     }
   })
+  
+  output$downloadCYTOTOXAnalysis <- downloadHandler(
+    filename = function() {
+      paste('CYTOTOXanalysis-', Sys.Date(), '.zip', sep='')
+    },
+    content = function(file) {
+      manageSpinner(TRUE)
+      
+      tempDir <- tempdir()
+      nomeRDS <- paste0("CYTOTOX_analysis-", Sys.Date(), ".rds")
+      nomeXLSX <- paste0("CYTOTOX_analysis-", Sys.Date(), ".xlsx")
+      
+      tempRdsPath <- file.path(tempDir, nomeRDS)
+      tempXlsxPath <- file.path(tempDir, nomeXLSX)
+      
+      results <- cytotoxResult
+      saveRDS(results, file = tempRdsPath)
+      
+      saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "CYTOTOX")
+      
+      zip(file, files = c(tempRdsPath, tempXlsxPath), flags = "-j")
+      manageSpinner(FALSE)
+    } 
+  )
   
   ### End CYTOTOX analysis ####
   

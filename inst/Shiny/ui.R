@@ -549,12 +549,18 @@ ui <- dashboardPage(
                                     selectizeInput("regressionType",
                                                    label="Select the regression model:",
                                                    choices = c("Linear","Hyperbola"))
-                    ),
-                    column(3,
-                           actionButton(inputId = "ELISA_buttonRegression",
-                                        label = 'Calculate the regression',
-                                        align = "right")
-                    )
+                            ),
+                            column(3,
+                                   tags$style(HTML("
+                                             #ELISA_buttonRegression {
+                                               margin-top: 25px;
+                                               margin-left: 20px;
+                                             }
+                                             ")),
+                                   actionButton(inputId = "ELISA_buttonRegression",
+                                                label = 'Calculate the regression',
+                                                align = "right")
+                            )
                     ),
                     fluidRow(
                       column(6,
@@ -586,19 +592,11 @@ ui <- dashboardPage(
                     plotOutput("ELISAplots"),
                     DTOutput("ELISAtables"),
                     fluidRow(
-                      column(width = 1,offset = 9,
-                             downloadButton( label = "Download the RDs", 
-                                             outputId = "downloadButton_ELISA",
-                                             #href = "Results.RData",
-                                             #download = "Results.RData",
-                                             icon = icon("download") )
-                      ),
-                      column(width = 1,offset = 7,
-                             downloadButton( label = "Download xlsx", 
-                                             outputId = "downloadButtonExcel_ELISA",
-                                             #href = "Results.RData",
-                                             #download = "Results.RData",
-                                             icon = icon("download") )
+                      column(width = 2, offset = 8, 
+                             downloadButton(outputId = "downloadElisaAnalysis", 
+                                            label = "Download Analysis & Excel", 
+                                            icon = icon("download"),
+                                            style = "float: right;"), 
                       )
                     )
                 )
@@ -725,7 +723,7 @@ ui <- dashboardPage(
                              downloadButton(label = "Download Analysis & Excel", 
                                             outputId = "downloadENDOCAnalysis",
                                             icon = icon("download"))
-                      ),
+                      )
                     )
                 )
               )
@@ -831,19 +829,10 @@ ui <- dashboardPage(
                     plotOutput("CYTOTOXplots"),
                     DTOutput("CYTOTOXtables"),
                     fluidRow(
-                      column(width = 1,
-                             downloadButton( label = "Download the RDs", 
-                                             outputId = "downloadButton_CYTOTOX",
-                                             #href = "Results.RData",
-                                             #download = "Results.RData",
-                                             icon = icon("download") )
-                      ),
-                      column(width = 1,offset = 2,
-                             downloadButton( label = "Download xlsx", 
-                                             outputId = "downloadButtonExcel_CYTOTOX",
-                                             #href = "Results.RData",
-                                             #download = "Results.RData",
-                                             icon = icon("download") )
+                      column(width = 2, offset = 9,
+                             downloadButton(label = "Download Analysis & Excel", 
+                                            outputId = "downloadCYTOTOXAnalysis",
+                                            icon = icon("download"))
                       )
                     )
                 )

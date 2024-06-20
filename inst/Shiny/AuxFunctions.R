@@ -76,14 +76,6 @@ resetPanel <- function(type, flags = NULL, panelStructures = NULL, numberOfPlane
            flags$EXPcol <- NULL
         },
         "ELISA" = {
-          FlagsELISA <- reactiveValues(cellCoo = NULL,
-                                       AllExp = "",
-                                       BASEselected = "",
-                                       STDCselected = "",
-                                       BLANCHEselected = "",
-                                       EXPselected = "",
-                                       EXPcol = NULL)
-          
            result$Initdata <- NULL
            result$data <- NULL
            result$TablePlot <- NULL
@@ -139,7 +131,6 @@ resetPanel <- function(type, flags = NULL, panelStructures = NULL, numberOfPlane
         }
   )
 }
-
 
 # function called when you need to read a file
 readfile <- function(filename, type, isFileUploaded, colname = TRUE, namesAll = namesAll, allDouble = FALSE, colors = FALSE) {
@@ -427,12 +418,48 @@ saveExcel <- function(filename, ResultList, analysis, PanelStructures = NULL) {
                  startCol=dim(ResultList[["NewPCR"]])[2]+ 2)
       
     },
+    "ELISA" = {
+      wb <- createWorkbook("ELISA")
+      
+      addWorksheet(wb, "TablePlot")
+      if (is.data.frame(ResultList[["TablePlot"]]$x$data)) {
+        writeDataTable(wb, sheet = "TablePlot", ResultList[["TablePlot"]]$x$data)
+      } else {
+        warning("ResultList[['TablePlot']]$x$data is not a data.frame")
+      }
+      
+      addWorksheet(wb, "standard curve")
+      standcurve <- ResultList[["Tablestandcurve"]]
+      lmStancurve <- ResultList[["Regression"]]$data
+      if (is.data.frame(standcurve)) {
+        writeDataTable(wb, standcurve, sheet = "standard curve")
+        print(ResultList[["Regression"]]$plot)
+        insertPlot(wb = wb, sheet = "standard curve", startCol = dim(standcurve)[2] + 2)
+      } else {
+        warning("ResultList[['Tablestandcurve']] is not a data.frame")
+      }
+      
+      addWorksheet(wb, "Analysis")
+      if (is.data.frame(ResultList[["dataFinal"]])) {
+        writeDataTable(wb, ResultList[["dataFinal"]], sheet = "Analysis")
+        print(ResultList[["dataFinal"]] %>%
+                ggplot(aes(x = Time, y = Quantification,
+                           fill = Experiment, group = Experiment)) +
+                geom_bar(position = "dodge", stat = "identity") +
+                theme_bw() +
+                labs(x = "Time", col = "Experiments",
+                     y = "Average quantifications obtained\n from the lm"))
+        insertPlot(wb = wb, sheet = "Analysis", startCol = dim(ResultList[["dataFinal"]])[2] + 2)
+      } else {
+        warning("ResultList[['dataFinal']] is not a data.frame")
+      }
+    },
     "ENDOC" = {
       wb <- createWorkbook("ENDOC")  
       
       if (!is.null(ResultList$Initdata) && is.data.frame(ResultList$Initdata)) {
-        addWorksheet(wb, "TablePlot")  # Aggiunge un nuovo foglio al workbook
-        writeDataTable(wb, ResultList$Initdata, sheet = "TablePlot")  # Scrive i dati nel foglio
+        addWorksheet(wb, "TablePlot") 
+        writeDataTable(wb, ResultList$Initdata, sheet = "TablePlot")
         print("Initdata scritto nel foglio Excel")
       } else {
         print("Errore: Initdata non disponibile o non è un data.frame")
@@ -441,6 +468,40 @@ saveExcel <- function(filename, ResultList, analysis, PanelStructures = NULL) {
       if (!is.null(ResultList$dataFinal) && is.data.frame(ResultList$dataFinal)) {
         addWorksheet(wb, "Results Analysis")  
         writeDataTable(wb, ResultList$dataFinal, sheet = "Results Analysis")  
+      }
+    },
+    "CYTOTOX" = {
+      ## Create a new workbook
+      wb <- createWorkbook("CYTOTOX")
+      
+      ## initial data
+      addWorksheet(wb, "TablePlot")
+      if (is.data.frame(ResultList[["TablePlot"]]$x$data)) {
+        writeDataTable(wb, sheet = "TablePlot", ResultList[["TablePlot"]]$x$data)
+      } else {
+        warning("ResultList[['TablePlot']]$x$data is not a data.frame")
+      }
+      
+      ## Analysis
+      addWorksheet(wb, "Results Analysis")
+      data = ResultList[["data"]]
+      finaldata = ResultList[["dataFinal"]]
+      
+      if (is.data.frame(data) && is.data.frame(finaldata)) {
+        print(
+          data %>% ggplot() +
+            geom_boxplot(aes(x = as.factor(EXP), y = Res, fill = SN, col = SN), alpha = 0.4) +
+            theme_bw() +
+            labs(x = "Experimental condition", y = "% Values w.r.t \nthe baseline cell death",
+                 col = "Sample Name", fill = "Sample Name")
+        )
+        
+        writeDataTable(wb, finaldata, sheet = "Results Analysis")
+        insertPlot(wb = wb, sheet = "Results Analysis",
+                   startCol = dim(finaldata)[2] + 2)
+      } else {
+        if (!is.data.frame(data)) warning("ResultList[['data']] is not a data.frame")
+        if (!is.data.frame(finaldata)) warning("ResultList[['dataFinal']] is not a data.frame")
       }
     },
     "FACS" = {
@@ -461,8 +522,8 @@ saveExcel <- function(filename, ResultList, analysis, PanelStructures = NULL) {
     }
   )
   
-  saveWorkbook(wb, filename)  # Salva il workbook
-  return(1)  # Restituisce 1 per indicare il successo
+  saveWorkbook(wb, filename)  
+  return(1)  
 }
 
 tableExcelColored = function(session, output, Result, FlagsExp, type){
