@@ -1827,7 +1827,6 @@ server <- function(input, output, session) {
         elisaResult$Tablestandcurve = standcurve
       }
       
-      print(standcurve)
       output$ELISA_Table_stdcurve <- DT::renderDataTable({
         DT::datatable(standcurve,
                       selection = 'none',
@@ -1977,7 +1976,7 @@ server <- function(input, output, session) {
       tempRdsPath <- file.path(tempDir, nomeRDS)
       tempXlsxPath <- file.path(tempDir, nomeXLSX)
       
-      results <- elisaResult
+      results <- DataAnalysisModule$elisaResult
       saveRDS(results, file = tempRdsPath)
       
       saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "ELISA")
@@ -1988,12 +1987,12 @@ server <- function(input, output, session) {
   )
   
   # save everytime there is a change in the results
-  # ELISAresultListen <- reactive({
-  #   reactiveValuesToList(elisaResult)
-  # })
-  # observeEvent(ELISAresultListen(), {
-  #   DataAnalysisModule$elisaResult = reactiveValuesToList(elisaResult)
-  # })
+  ELISAresultListen <- reactive({
+    reactiveValuesToList(elisaResult)
+  })
+  observeEvent(ELISAresultListen(), {
+    DataAnalysisModule$elisaResult = reactiveValuesToList(elisaResult)
+  })
   
   ### End ELISA analysis ####  
   
@@ -2575,7 +2574,7 @@ server <- function(input, output, session) {
       tempRdsPath <- file.path(tempDir, nomeRDS)
       tempXlsxPath <- file.path(tempDir, nomeXLSX)
       
-      results <- endocResult  # Assicurati di accedere a endocResult in un contesto reattivo, se necessario
+      results <- DataAnalysisModule$endocResult
       saveRDS(results, file = tempRdsPath)
       
       saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "ENDOC")
@@ -2977,7 +2976,7 @@ server <- function(input, output, session) {
       tempRdsPath <- file.path(tempDir, nomeRDS)
       tempXlsxPath <- file.path(tempDir, nomeXLSX)
       
-      results <- cytotoxResult
+      results <- DataAnalysisModule$cytotoxResult
       saveRDS(results, file = tempRdsPath)
       
       saveExcel(filename = tempXlsxPath, ResultList=results, analysis = "CYTOTOX")
@@ -3186,25 +3185,6 @@ server <- function(input, output, session) {
           )
         ), editable = list(target = 'cell', columns = 2))  
       })
-      
-      data_for_column_update <- data.frame(
-        Name = colnames(data_for_table)[-1],  
-        New_name = rep("-", length(colnames(data_for_table)) - 1),
-        stringsAsFactors = FALSE
-      )
-      
-      facsResult$columnName <- data_for_column_update
-      
-      output$FACScolumnNameUpdate <- renderDT({
-        datatable(data_for_column_update, options = list(
-          pageLength = 10,
-          autoWidth = TRUE,
-          columnDefs = list(
-            list(targets = 1, width = '50%'),  
-            list(targets = 2, width = '50%')
-          )
-        ), editable = list(target = 'cell', columns = 2))  
-      })
     } else {
       selected_item <- input[[currentInputId]]
       path_components <- strsplit(FlagsFACS$actualPath, "/")[[1]]
@@ -3240,31 +3220,6 @@ server <- function(input, output, session) {
       }
       
       FlagsFACS$data[[new_column_name]] <- new_column_data
-      
-      data_for_column_update <- data.frame(
-        Name = colnames(FlagsFACS$data),
-        New_name = rep("-", length(colnames(FlagsFACS$data))),
-        stringsAsFactors = FALSE
-      )
-      
-      data_for_column_update <- data_for_column_update[data_for_column_update$Name != "Name", ]
-      
-      facsResult$columnName <- data_for_column_update
-      output$FACSmatrix <- renderDT({
-        datatable(FlagsFACS$data, options = list(autoWidth = TRUE))
-      })
-      
-      output$FACScolumnNameUpdate <- renderDT({
-        datatable(data_for_column_update, options = list(
-          pageLength = 10,
-          autoWidth = TRUE,
-          columnDefs = list(
-            list(targets = 1, width = '50%'),  
-            list(targets = 2, width = '50%'),
-            list(visible = FALSE, targets = 0)  
-          )
-        ), editable = list(target = 'cell', columns = 2))
-      })
     }
     loadDrop() 
   }, ignoreInit = TRUE)
@@ -3374,6 +3329,7 @@ server <- function(input, output, session) {
   }
   
   observeEvent(input$SaveFACSanalysis, {
+    print(facsResult$dataFinal)
     if (is.null(input$selectBaseGate) || input$selectBaseGate == "") {
       showAlert("Error", "No gate selected. Please select a gate", "error", 5000)
       return()
@@ -3381,7 +3337,7 @@ server <- function(input, output, session) {
     
     selected_gate <- input$selectBaseGate
     selected_gate_index <- which(names(FlagsFACS$data) == selected_gate)
-
+    
     if (length(selected_gate_index) == 0) {
       showNotification("Selected column not found in the dataset", type = "error")
       return()
@@ -3396,31 +3352,31 @@ server <- function(input, output, session) {
     new_data <- do.call(rbind, processed_data)
     
     current_names <- FlagsFACS$data$Name
-    if (!is.null(facsResult$data)) {
-      facsResult$data$Name <- current_names
+    if (!is.null(facsResult$dataFinal)) {
+      facsResult$dataFinal$Name <- current_names
     }
     
     new_column_name <- names(new_data)[2]
-    if (is.null(facsResult$data)) {
-      facsResult$data <- new_data
+    if (is.null(facsResult$dataFinal)) {
+      facsResult$dataFinal <- new_data
     } else {
-      if (new_column_name %in% names(facsResult$data)) {
-        facsResult$data[[new_column_name]] <- new_data[, 2]
+      if (new_column_name %in% names(facsResult$dataFinal)) {
+        facsResult$dataFinal[[new_column_name]] <- new_data[, 2]
       } else {
-        facsResult$data <- cbind(facsResult$data, new_data[, 2])
-        names(facsResult$data)[ncol(facsResult$data)] <- new_column_name
+        facsResult$dataFinal <- cbind(facsResult$dataFinal, new_data[, 2])
+        names(facsResult$dataFinal)[ncol(facsResult$dataFinal)] <- new_column_name
       }
     }
     
-    existing_column_names <- names(facsResult$data)
+    existing_column_names <- names(facsResult$dataFinal)
     for (col_name in existing_column_names) {
-      if (col_name != new_column_name && all(facsResult$data[[col_name]] == facsResult$data[[new_column_name]])) {
-        facsResult$data[[col_name]] <- NULL
+      if (col_name != new_column_name && all(facsResult$dataFinal[[col_name]] == facsResult$dataFinal[[new_column_name]])) {
+        facsResult$dataFinal[[col_name]] <- NULL
       }
     }
     
     output$FACSresult <- renderDT({
-      datatable(facsResult$data, 
+      datatable(facsResult$dataFinal, 
                 options = list(
                   autoWidth = TRUE,
                   columnDefs = list(
@@ -3430,8 +3386,29 @@ server <- function(input, output, session) {
       )
     })
     
-    facsResult$dataFinal <- facsResult$data
+    column_names <- colnames(facsResult$dataFinal)
+    column_names <- column_names[column_names != "Name"]
+    
+    data_for_column_update <- data.frame(
+      Name = column_names,
+      New_name = rep("-", length(column_names)),
+      stringsAsFactors = FALSE
+    )
+    
+    facsResult$columnName <- data_for_column_update
+    
+    output$FACScolumnNameUpdate <- renderDT({
+      datatable(data_for_column_update, options = list(
+        pageLength = 10,
+        autoWidth = TRUE,
+        columnDefs = list(
+          list(targets = 1, width = '50%'),  
+          list(targets = 2, width = '50%')
+        )
+      ), editable = list(target = 'cell', columns = 2))
+    })
   })
+  
   
   output$downloadFACSanalysis <- downloadHandler(
     filename = function() {
@@ -3506,7 +3483,6 @@ server <- function(input, output, session) {
 
   }, ignoreInit = TRUE)
   
-  
   observeEvent(input$FACScolumnNameUpdate_cell_edit, {
     info <- input$FACScolumnNameUpdate_cell_edit
     
@@ -3519,47 +3495,67 @@ server <- function(input, output, session) {
       return()
     }
     
+    
+    column_names <- colnames(facsResult$dataFinal)
     old_name <- facsResult$columnName[row, "Name"]
     
-    for (i in seq_along(facsResult$name)) {
-      if (grepl(old_name, facsResult$name[[i]])) {
-        facsResult$name[[i]] <- gsub(old_name, new_value, facsResult$name[[i]])
-      }
-    }
-    
-    colnames(FlagsFACS$data) <- sapply(colnames(FlagsFACS$data), function(col_name) {
-      if (col_name == old_name) {
-        return(new_value)
-      } else {
-        return(col_name)
-      }
-    })
-    
-    FlagsFACS$actualPath <- gsub(old_name, new_value, FlagsFACS$actualPath)
+    colnames(facsResult$dataFinal)[colnames(facsResult$dataFinal) == old_name] <- new_value
     
     facsResult$columnName[row, "Name"] <- new_value
     facsResult$columnName[row, "New_name"] <- "-"
     
+    output$FACSresult <- renderDT({
+      datatable(facsResult$dataFinal, 
+                options = list(
+                  autoWidth = TRUE,
+                  columnDefs = list(
+                    list(visible = FALSE, targets = 0)  
+                  )
+                )
+      )
+    })
+    
+    column_names <- colnames(facsResult$dataFinal)
+    column_names <- column_names[column_names != "Name"]
+    
+    data_for_column_update <- data.frame(
+      Name = column_names,
+      New_name = rep("-", length(column_names)),
+      stringsAsFactors = FALSE
+    )
+    
+    facsResult$columnName <- data_for_column_update
+    
     output$FACScolumnNameUpdate <- renderDT({
-      datatable(facsResult$columnName, options = list(
+      datatable(data_for_column_update, options = list(
         pageLength = 10,
         autoWidth = TRUE,
         columnDefs = list(
-          list(targets = 1, width = '50%'),
+          list(targets = 1, width = '50%'),  
           list(targets = 2, width = '50%')
         )
       ), editable = list(target = 'cell', columns = 2))
     })
     
-    output$FACSmatrix <- renderDT({
-      datatable(FlagsFACS$data, options = list(autoWidth = TRUE))
+    if (!is.null(facsResult$dataFinal)) {
+      colnames(facsResult$dataFinal)[colnames(facsResult$dataFinal) == old_name] <- new_value
+    }
+    
+    output$FACSresult <- renderDT({
+      datatable(facsResult$dataFinal, 
+                options = list(
+                  autoWidth = TRUE,
+                  columnDefs = list(
+                    list(visible = FALSE, targets = 0)  
+                  )
+                )
+      )
     })
   })
   
   
   ### End FACS analysis ####
   
-  ### load generic analysis
   ### Loading files ####
   UploadDataAnalysisModuleAllFalse  = reactiveValues(FlagALL = F,
                                                      FlagUpdate = F,
