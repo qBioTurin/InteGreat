@@ -981,19 +981,22 @@ UploadRDs <- function(Flag, session, output, DataAnalysisModule, Result, FlagsEx
                server = FALSE
              )
            }
-           print(Result$ENDOCcell_TIME)
+          
            if (!is.null(Result$ENDOCcell_TIME)) {
+             print(Result$ENDOCcell_TIME)
+             print(Result$ENDOCcell_SN)
+             
              updateSelectizeInput(inputId = "ENDOCcell_TIME",
                                   session = session,
                                   choices = unique(c(Result$ENDOCcell_TIME))
              )
-             
-             updateSelectizeInput(inputId = "ENDOCcell_SN",
+             updateSelectizeInput(inputId = "ENDOCcell_EXP",
                                   session = session,
-                                  choices = unique(c(Result$ENDOCcell_SN))
+                                  choices = unique(c(Result$ENDOCcell_EXP))
              )
-             FlagsExp$AllExp <- unique(c(Result$ENDOCcell_SN))
+             FlagsExp$AllExp <- unique(c(Result$ENDOCcell_EXP))
            }
+           
            
            tableExcelColored(session = session,
                              Result = Result, 
