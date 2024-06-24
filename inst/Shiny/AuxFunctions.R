@@ -981,16 +981,17 @@ UploadRDs <- function(Flag, session, output, DataAnalysisModule, Result, FlagsEx
                server = FALSE
              )
            }
-           
+           print(Result$ENDOCcell_TIME)
            if (!is.null(Result$ENDOCcell_TIME)) {
-             updateSelectizeInput(inputId = "ENDOCcell_TIME", session = session,
+             updateSelectizeInput(inputId = "ENDOCcell_TIME",
+                                  session = session,
                                   choices = unique(c(Result$ENDOCcell_TIME))
              )
              
-             updateSelectizeInput(inputId = "ENDOCcell_SN", session = session,
+             updateSelectizeInput(inputId = "ENDOCcell_SN",
+                                  session = session,
                                   choices = unique(c(Result$ENDOCcell_SN))
              )
-             
              FlagsExp$AllExp <- unique(c(Result$ENDOCcell_SN))
            }
            
@@ -1148,7 +1149,50 @@ UploadRDs <- function(Flag, session, output, DataAnalysisModule, Result, FlagsEx
                              selected = "uploadCYTOTOX")
          },
          "FACS" = {
+           for (nameList in names(DataAnalysisModule$facsResult)) 
+             Result[[nameList]] <- DataAnalysisModule$facsResult[[nameList]]
            
+           for (nameList in names(DataAnalysisModule$facsResult$Flags)) 
+             FlagsExp[[nameList]] <- DataAnalysisModule$facsResult$Flags[[nameList]]
+           
+           if (!is.null(Result$TablePlot)) {
+             output$FACSmatrix <- renderDT(
+               Result$TablePlot,
+               server = FALSE
+             )
+           }
+           
+           if (!is.null(Result$dataFinal)) {
+             output$FACSresult <- renderDT(
+               Result$dataFinal,
+               server = FALSE
+             )
+             
+             column_names <- colnames(Result$dataFinal)
+             column_names <- column_names[column_names != "Name"]
+             
+             data_for_column_update <- data.frame(
+               Name = column_names,
+               New_name = rep("-", length(column_names)),
+               stringsAsFactors = FALSE
+             )
+             
+             Result$columnName <- data_for_column_update
+             
+             output$FACScolumnNameUpdate <- renderDT({
+               datatable(data_for_column_update, options = list(
+                 pageLength = 10,
+                 autoWidth = TRUE,
+                 columnDefs = list(
+                   list(targets = 1, width = '50%'),  
+                   list(targets = 2, width = '50%')
+                 )
+               ), editable = list(target = 'cell', columns = 2))
+             })
+           }
+           
+           updateTabsetPanel(session = session, "SideTabs",
+                             selected = "tablesFACS")
          }
   )
 }

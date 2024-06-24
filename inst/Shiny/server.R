@@ -25,6 +25,7 @@ server <- function(input, output, session) {
                                           pcrTabs = NULL,
                                           cytotoxTabs= NULL,
                                           endocTabs=NULL,
+                                          facsTabs = NULL,
                                           otherTabs = NULL,
                                           otherTabsMean = NULL)
   
@@ -2996,6 +2997,7 @@ server <- function(input, output, session) {
     depth = NULL,
     depthCount = NULL,
     name = NULL,
+    originalName = NULL,
     columnName = NULL,
     statistics = NULL,
     cells = NULL
@@ -3016,6 +3018,7 @@ server <- function(input, output, session) {
   FACSresultListen <- reactive({
     reactiveValuesToList(facsResult)
   })
+  
   observeEvent(FACSresultListen(), {
     DataAnalysisModule$facsResult = reactiveValuesToList(facsResult)
     DataAnalysisModule$facsResult$Flags = reactiveValuesToList(FlagsFACS)
@@ -3646,8 +3649,8 @@ server <- function(input, output, session) {
                   session = session,
                   output = output,
                   DataAnalysisModule = DataAnalysisModule,
-                  Result = prccResult, 
-                  FlagsExp = FlagsPRCC)
+                  Result = pcrResult, 
+                  FlagsExp = FlagsPCR)
       }
       else if(UploadDataAnalysisModule$FlagENDOC || UploadDataAnalysisModule$FlagALL){
         UploadRDs(Flag = "ENDOC",
@@ -3685,7 +3688,15 @@ server <- function(input, output, session) {
         
       }
       
-      UploadDataAnalysisModule = UploadDataAnalysisModuleAllFalse
+      UploadDataAnalysisModule$FlagUpdate <- FALSE
+      UploadDataAnalysisModule$FlagALL <- FALSE
+      UploadDataAnalysisModule$FlagWB <- FALSE
+      UploadDataAnalysisModule$FlagPRCC <- FALSE
+      UploadDataAnalysisModule$FlagENDOC <- FALSE
+      UploadDataAnalysisModule$FlagELISA <- FALSE
+      UploadDataAnalysisModule$FlagCYTOTOX <- FALSE
+      UploadDataAnalysisModule$FlagFACS <- FALSE
+      #UploadDataAnalysisModule = UploadDataAnalysisModuleAllFalse
     }
   })
   
