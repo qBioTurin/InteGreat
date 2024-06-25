@@ -1532,6 +1532,10 @@ server <- function(input, output, session) {
         elisaResult$ELISAcell_SN[cellCoo[1], cellCoo[2]] = value.now
         ELISAtb$x$data[cellCoo[1], paste0("Col", cellCoo[2])] = value.now
         
+        var1_val <- elisaResult$data$Var1[cellCoo[1]]
+        var2_val <- elisaResult$data$Var2[cellCoo[1]]
+        elisaResult$data$exp[elisaResult$data$Var1 == var1_val & elisaResult$data$Var2 == var2_val] <- value.now
+        
         if (!input$ELISAcell_SN %in% FlagsELISA$AllExp) {
           exp = unique(c(FlagsELISA$AllExp, input$ELISAcell_SN))
           FlagsELISA$AllExp = exp
@@ -1550,27 +1554,37 @@ server <- function(input, output, session) {
   
   observeEvent(input$ELISAcell_EXP, {
     if (!is.null(elisaResult$ELISAcell_EXP) && !is.null(FlagsELISA$cellCoo) && !anyNA(FlagsELISA$cellCoo)) {
-      ELISAtb = elisaResult$TablePlot
-      cellCoo = FlagsELISA$cellCoo
+      ELISAtb <- elisaResult$TablePlot
+      cellCoo <- FlagsELISA$cellCoo
       
-      value.bef = elisaResult$ELISAcell_EXP[cellCoo[1], cellCoo[2]] 
-      value.now = input$ELISAcell_EXP
+      value.bef <- elisaResult$ELISAcell_EXP[cellCoo[1], cellCoo[2]] 
+      value.now <- input$ELISAcell_EXP
       
       if (value.now != "" && value.now != value.bef) {
         currentValues <- elisaResult$Initdata[cellCoo[1], cellCoo[2]]
         
-        elisaResult$ELISAcell_EXP[cellCoo[1], cellCoo[2]] = value.now
+        elisaResult$ELISAcell_EXP[cellCoo[1], cellCoo[2]] <- value.now
+        
+        # Aggiorna data
+        var1_val <- elisaResult$data$Var1[cellCoo[1]]
+        var2_val <- elisaResult$data$Var2[cellCoo[1]]
+        elisaResult$data$time[elisaResult$data$Var1 == var1_val & elisaResult$data$Var2 == var2_val] <- value.now
+        
+        # Aggiorna Tablestandcurve
+        elisaResult$Tablestandcurve$Concentrations[elisaResult$Tablestandcurve$exp == elisaResult$data$exp[cellCoo[1]] & 
+                                                     elisaResult$Tablestandcurve$Measures == elisaResult$data$values[cellCoo[1]]] <- value.now
+        
         tableExcelColored(session = session,
                           Result = elisaResult, 
                           FlagsExp = FlagsELISA,
-                          type = "Update",
-        )
+                          type = "Update")
         
         output$ELISASelectedValues <- renderText(paste("Updated value", paste(currentValues), ": time ", value.now))
         output$ELISAmatrix <- renderDataTable({elisaResult$TablePlot})
       }
     } else return()
   }, ignoreInit = TRUE)
+  
   
   ## update Baselines checkBox
   observeEvent(c(FlagsELISA$AllExp,FlagsELISA$BASEselected,FlagsELISA$BLANCHEselected),{
@@ -1810,24 +1824,27 @@ server <- function(input, output, session) {
     })
   })
 
-  observeEvent(input$ELISA_standcurve,{
+  observe({
     elisaResult$data -> data
     
     if(input$ELISA_standcurve != ""){
-      standcurve <- data %>%
-        filter(exp %in% input$ELISA_standcurve) %>%
-        select(exp, time, values) %>%
-        rename(Concentrations = time, Measures = values)
-      
-      if(!is.null(elisaResult$Tablestandcurve) && 
-         all.equal(elisaResult$Tablestandcurve %>% select(-Concentrations),
-                   standcurve %>% select(-Concentrations) ))
-      {
-        standcurve =  elisaResult$Tablestandcurve
-      }else{
-        elisaResult$Tablestandcurve = standcurve
-      }
-      
+      print("primo if")
+        standcurve <- data %>%
+          filter(exp %in% input$ELISA_standcurve) %>%
+          select(exp, time, values) %>%
+          rename(Concentrations = time, Measures = values)
+        
+        if(!is.null(elisaResult$Tablestandcurve) && 
+           all.equal(elisaResult$Tablestandcurve %>% select(-Concentrations),
+                     standcurve %>% select(-Concentrations) ))
+        {
+          print("secondo if")
+          standcurve =  elisaResult$Tablestandcurve
+        }else{
+          elisaResult$Tablestandcurve = standcurve
+        }
+
+     print("stampa")
       output$ELISA_Table_stdcurve <- DT::renderDataTable({
         DT::datatable(standcurve,
                       selection = 'none',
@@ -1836,6 +1853,7 @@ server <- function(input, output, session) {
                       rownames = FALSE
         )
       })
+      print("fine stampa")
     } 
   })
   
@@ -2874,7 +2892,7 @@ server <- function(input, output, session) {
   },ignoreNULL = F)
   
   toListen_cytotox <- reactive({
-    return( list(cytotoxResult$CYTOTOXcell_EXP,cytotoxResult$CYTOTOXcell_SN,FlagsCYTOTOX$BASEselected) )
+    return( list(cytotoxResult$CYTOTOXcell_EXP,cytotoxResult$CYTOTOXcell_SN, cytotoxResult$CYTOTOXcell_REP, FlagsCYTOTOX$BASEselected) )
   })
   observeEvent(toListen_cytotox(),{
     baselines = FlagsCYTOTOX$BASEselected
