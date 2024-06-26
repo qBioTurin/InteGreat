@@ -3017,6 +3017,7 @@ server <- function(input, output, session) {
     name = NULL,
     originalName = NULL,
     columnName = NULL,
+    originalColumnName = NULL,
     statistics = NULL,
     cells = NULL
   )
@@ -3241,6 +3242,9 @@ server <- function(input, output, session) {
       }
       
       FlagsFACS$data[[new_column_name]] <- new_column_data
+      output$FACSmatrix <- renderDT({
+        datatable(FlagsFACS$data, options = list(autoWidth = TRUE))
+      })
     }
     loadDrop() 
   }, ignoreInit = TRUE)
@@ -3348,9 +3352,8 @@ server <- function(input, output, session) {
     data.frame(Name = data_row[1], FinalPercent = sprintf("%.2f%%", final_percentage)) %>%
     setNames(c("Name", last_percentage_name))
   }
-  
+
   observeEvent(input$SaveFACSanalysis, {
-    print(facsResult$dataFinal)
     if (is.null(input$selectBaseGate) || input$selectBaseGate == "") {
       showAlert("Error", "No gate selected. Please select a gate", "error", 5000)
       return()
@@ -3396,6 +3399,12 @@ server <- function(input, output, session) {
       }
     }
     
+    if (!is.null(facsResult$originalColumnName)) {
+      facsResult$originalColumnName <- unique(c(facsResult$originalColumnName, new_column_name))
+    } else {
+      facsResult$originalColumnName <- c(new_column_name)
+    }
+    
     output$FACSresult <- renderDT({
       datatable(facsResult$dataFinal, 
                 options = list(
@@ -3429,7 +3438,6 @@ server <- function(input, output, session) {
       ), editable = list(target = 'cell', columns = 2))
     })
   })
-  
   
   output$downloadFACSanalysis <- downloadHandler(
     filename = function() {
@@ -3465,9 +3473,6 @@ server <- function(input, output, session) {
       associated_name <- FlagsFACS$data[row, "Name"]
 
       index <- which(facsResult$name == associated_name)
-      
-      print("Index found:")
-      print(index)
       
       if (length(index) > 0) {
         if (new_value == "") {
@@ -3511,19 +3516,25 @@ server <- function(input, output, session) {
     col <- info$col
     new_value <- info$value
     
+    old_name <- facsResult$columnName[row, "Name"]
+    original_name <- facsResult$originalColumnName[row]
+    
     if (new_value == "") {
-      showAlert("Error", "A column name cannot be empty", "error", 5000)
-      return()
+      old_value <- original_name
+      new_value <- original_name
     }
     
+    if (!is.null(facsResult$dataFinal)) {
+      colnames(facsResult$dataFinal)[colnames(facsResult$dataFinal) == old_name] <- new_value
+    }
     
-    column_names <- colnames(facsResult$dataFinal)
-    old_name <- facsResult$columnName[row, "Name"]
-    
-    colnames(facsResult$dataFinal)[colnames(facsResult$dataFinal) == old_name] <- new_value
-    
-    facsResult$columnName[row, "Name"] <- new_value
-    facsResult$columnName[row, "New_name"] <- "-"
+    if (new_value == original_name) {
+      facsResult$columnName[row, "Name"] <- original_name
+      facsResult$columnName[row, "New_name"] <- "-"
+    } else {
+      facsResult$columnName[row, "Name"] <- new_value
+      facsResult$columnName[row, "New_name"] <- "-"
+    }
     
     output$FACSresult <- renderDT({
       datatable(facsResult$dataFinal, 
@@ -3540,12 +3551,18 @@ server <- function(input, output, session) {
     column_names <- column_names[column_names != "Name"]
     
     data_for_column_update <- data.frame(
-      Name = column_names,
-      New_name = rep("-", length(column_names)),
+      Name = facsResult$originalColumnName,
+      New_name = sapply(1:nrow(facsResult$columnName), function(i) {
+        if (facsResult$columnName$Name[i] == facsResult$originalColumnName[i]) {
+          return("-")
+        } else {
+          return(facsResult$columnName$Name[i])
+        }
+      }),
       stringsAsFactors = FALSE
     )
     
-    facsResult$columnName <- data_for_column_update
+    #facsResult$columnName <- data_for_column_update
     
     output$FACScolumnNameUpdate <- renderDT({
       datatable(data_for_column_update, options = list(
@@ -3556,21 +3573,6 @@ server <- function(input, output, session) {
           list(targets = 2, width = '50%')
         )
       ), editable = list(target = 'cell', columns = 2))
-    })
-    
-    if (!is.null(facsResult$dataFinal)) {
-      colnames(facsResult$dataFinal)[colnames(facsResult$dataFinal) == old_name] <- new_value
-    }
-    
-    output$FACSresult <- renderDT({
-      datatable(facsResult$dataFinal, 
-                options = list(
-                  autoWidth = TRUE,
-                  columnDefs = list(
-                    list(visible = FALSE, targets = 0)  
-                  )
-                )
-      )
     })
   })
   
@@ -3703,6 +3705,7 @@ server <- function(input, output, session) {
                   DataAnalysisModule = DataAnalysisModule,
                   Result = facsResult, 
                   FlagsExp = FlagsFACS)
+        loadDrop()
         
       }
       
