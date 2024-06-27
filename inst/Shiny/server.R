@@ -3270,6 +3270,7 @@ server <- function(input, output, session) {
   }
   
   loadDrop <- function() {
+    print("sono in load drop")
     targetLevel <- FlagsFACS$actualLevel + 1
     currentPath <- FlagsFACS$actualPath
     
@@ -3699,13 +3700,14 @@ server <- function(input, output, session) {
         
       }
       else if(UploadDataAnalysisModule$FlagFACS || UploadDataAnalysisModule$FlagALL){
+        maxDepth <- max(facsResult$depthCount, na.rm = TRUE)
+        updateSelectizeUI(7)   
         UploadRDs(Flag = "FACS",
                   session = session,
                   output = output,
                   DataAnalysisModule = DataAnalysisModule,
                   Result = facsResult, 
                   FlagsExp = FlagsFACS)
-        loadDrop()
         
       }
       

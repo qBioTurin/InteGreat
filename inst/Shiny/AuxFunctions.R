@@ -1165,6 +1165,8 @@ UploadRDs <- function(Flag, session, output, DataAnalysisModule, Result, FlagsEx
              )
            }
            
+           FlagsExp$actualLevel <- 0
+           print(FlagsExp$actualLevel)
            if (!is.null(Result$dataFinal)) {
              output$FACSresult <- renderDT(
                Result$dataFinal,
@@ -1198,4 +1200,8 @@ UploadRDs <- function(Flag, session, output, DataAnalysisModule, Result, FlagsEx
                              selected = "tablesFACS")
          }
   )
+}
+
+escapeRegex <- function(string) {
+  gsub("([\\\\^$.*+?()[{\\]|-])", "\\\\\\1", string)
 }
