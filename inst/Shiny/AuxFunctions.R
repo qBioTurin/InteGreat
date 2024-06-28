@@ -870,7 +870,59 @@ updateTable <- function(position, analysis, info, data, result, flag) {
   return(paste("Updated values: ", new_value))
 }
 
-UploadRDs <- function(Flag, session, output, DataAnalysisModule, Result, FlagsExp, PanelStructures = NULL) {
+updateSelectizeUI <- function(maxDepth) {
+  rowContent <- fluidRow(
+    lapply(1:maxDepth, function(i) {
+      column(
+        2, offset = 1,
+        tags$div(style = "display: none;", id = paste("div_FACScell", i, sep = ""),
+                 selectizeInput(
+                   inputId = paste("FACScell", i, sep = "_"),
+                   label = paste("Gate", i),
+                   choices = c(),
+                   options = list(placeholder = 'Select the next gate', create = TRUE)
+                 )
+        )
+      )
+    })
+  )
+  return(rowContent)
+}
+
+escapeRegex <- function(string) {
+  gsub("([\\\\^$.*+?()[{\\]|-])", "\\\\\\1", string)
+}
+
+loadDrop <- function(facsResult, FlagsFACS, session) {
+  targetLevel <- FlagsFACS$actualLevel + 1
+  currentPath <- FlagsFACS$actualPath
+  
+  escapedPath <- escapeRegex(currentPath)
+  regex_path <- paste0(".*", escapedPath, "/[^/]+$")
+  valid_indices <- facsResult$depthCount == targetLevel & grepl(regex_path, facsResult$name)
+  
+  valid_names <- facsResult$name[valid_indices]
+  valid_names <- as.character(valid_names)
+  
+  if (length(valid_names) > 0) {
+    short_names <- sapply(strsplit(valid_names, "/", fixed = TRUE), function(x) tail(x, 1))
+  } else {
+    short_names <- "no valid names found"
+  }
+  
+  nextInputId <- paste("FACScell", targetLevel, sep = "_")
+  nextDivId <- paste("div_FACScell", targetLevel, sep = "")
+  
+  if (length(short_names) == 0) {
+    updateSelectInput(session, nextInputId, choices = list("No choices available" = ""), selected = "")
+  } else {
+    updateSelectInput(session, nextInputId, choices = setNames(short_names, short_names), selected = character(0))
+  }
+  
+  shinyjs::runjs(paste0('setTimeout(function() { $("#', nextDivId, '").css("display", "block"); }, 200);'))
+}
+
+UploadRDs <- function(Flag, input, session, output, DataAnalysisModule, Result, FlagsExp, PanelStructures = NULL) {
   switch(Flag,
          "WB" = {
            for (nameList in names(Result)) 
@@ -1158,6 +1210,21 @@ UploadRDs <- function(Flag, session, output, DataAnalysisModule, Result, FlagsEx
            for (nameList in names(DataAnalysisModule$facsResult$Flags)) 
              FlagsExp[[nameList]] <- DataAnalysisModule$facsResult$Flags[[nameList]]
            
+           maxDepth <- max(Result$depthCount, na.rm = TRUE)
+           output$dynamicSelectize <- renderUI({
+             updateSelectizeUI(maxDepth)
+           })
+           
+           runjs("
+                    setTimeout(function() {
+                      Shiny.setInputValue('updateActualLevel', 1);
+                    }, 500);
+                ")
+                
+           observeEvent(input$updateActualLevel, {
+               FlagsExp$actualLevel <- 0
+           })
+           
            if (!is.null(Result$TablePlot)) {
              output$FACSmatrix <- renderDT(
                Result$TablePlot,
@@ -1165,8 +1232,6 @@ UploadRDs <- function(Flag, session, output, DataAnalysisModule, Result, FlagsEx
              )
            }
            
-           FlagsExp$actualLevel <- 0
-           print(FlagsExp$actualLevel)
            if (!is.null(Result$dataFinal)) {
              output$FACSresult <- renderDT(
                Result$dataFinal,
@@ -1200,8 +1265,4 @@ UploadRDs <- function(Flag, session, output, DataAnalysisModule, Result, FlagsEx
                              selected = "tablesFACS")
          }
   )
-}
-
-escapeRegex <- function(string) {
-  gsub("([\\\\^$.*+?()[{\\]|-])", "\\\\\\1", string)
 }

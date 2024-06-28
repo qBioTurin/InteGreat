@@ -3125,39 +3125,22 @@ server <- function(input, output, session) {
         
         maxDepth <- max(facsResult$depthCount, na.rm = TRUE)
         showAlert("Success", "The Excel has been uploaded with success", "success", 2000)
-        updateSelectizeUI(maxDepth)
+        
+        output$dynamicSelectize <- renderUI({
+          updateSelectizeUI(maxDepth)
+        })
         
         updateTabsetPanel(session, "SideTabs", selected = "tablesFACS")
       }
     }
   }
   
+  
   observeEvent(input$SideTabs, {
     if (input$SideTabs == "tablesFACS") {
       FlagsFACS$actualLevel <- 0
     }
   }, ignoreInit = TRUE)  
-  
-  updateSelectizeUI <- function(maxDepth) {
-    output$dynamicSelectize <- renderUI({
-      rowContent <- fluidRow(
-        lapply(1:maxDepth, function(i) {
-          column(
-            2, offset = 1,
-            tags$div(style = "display: none;", id = paste("div_FACScell", i, sep = ""),
-                     selectizeInput(
-                       inputId = paste("FACScell", i, sep = "_"),
-                       label = paste("Gate", i),
-                       choices = c(),
-                       options = list(placeholder = 'Select the next gate', create = TRUE)
-                     )
-            )
-          )
-        })
-      )
-      rowContent
-    })
-  }
   
   observeEvent(FlagsFACS$actualLevel, {
     currentInputId <- paste("FACScell", FlagsFACS$actualLevel, sep = "_")
@@ -3246,9 +3229,9 @@ server <- function(input, output, session) {
         datatable(FlagsFACS$data, options = list(autoWidth = TRUE))
       })
     }
-    loadDrop() 
+    loadDrop(facsResult, FlagsFACS, session) 
   }, ignoreInit = TRUE)
-
+  
   observe({
     FlagsFACS$actualPath
     choices <- colnames(FlagsFACS$data)
@@ -3264,40 +3247,6 @@ server <- function(input, output, session) {
                          choices = choices
     )
   })
-  
-  escapeRegex <- function(string) {
-    gsub("([\\\\^$.*+?()[{\\]|-])", "\\\\\\1", string)
-  }
-  
-  loadDrop <- function() {
-    print("sono in load drop")
-    targetLevel <- FlagsFACS$actualLevel + 1
-    currentPath <- FlagsFACS$actualPath
-    
-    escapedPath <- escapeRegex(currentPath)
-    regex_path <- paste0(".*", escapedPath, "/[^/]+$")
-    valid_indices <- facsResult$depthCount == targetLevel & grepl(regex_path, facsResult$name)
-    
-    valid_names <- facsResult$name[valid_indices]
-    valid_names <- as.character(valid_names)
-
-    if (length(valid_names) > 0) {
-      short_names <- sapply(strsplit(valid_names, "/", fixed = TRUE), function(x) tail(x, 1))
-    } else {
-      short_names <- "no valid names found"
-    }
-    
-    nextInputId <- paste("FACScell", targetLevel, sep = "_")
-    nextDivId <- paste("div_FACScell", targetLevel, sep = "")
-    
-    if (length(short_names) == 0) {
-      updateSelectInput(session, nextInputId, choices = list("No choices available" = ""), selected = "")
-    } else {
-      updateSelectInput(session, nextInputId, choices = setNames(short_names, short_names), selected = character(0))
-    }
-    
-    shinyjs::runjs(paste0('setTimeout(function() { $("#', nextDivId, '").css("display", "block"); }, 200);'))
-  }
   
   observe({
     if (is.null(facsResult$depthCount) || length(facsResult$depthCount) == 0) {
@@ -3700,10 +3649,9 @@ server <- function(input, output, session) {
         
       }
       else if(UploadDataAnalysisModule$FlagFACS || UploadDataAnalysisModule$FlagALL){
-        maxDepth <- max(facsResult$depthCount, na.rm = TRUE)
-        updateSelectizeUI(7)   
         UploadRDs(Flag = "FACS",
                   session = session,
+                  input = input,
                   output = output,
                   DataAnalysisModule = DataAnalysisModule,
                   Result = facsResult, 
