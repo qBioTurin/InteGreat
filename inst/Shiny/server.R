@@ -1566,13 +1566,10 @@ server <- function(input, output, session) {
         elisaResult$ELISAcell_EXP[cellCoo[1], cellCoo[2]] <- value.now
         
         # Aggiorna data
-        var1_val <- elisaResult$data$Var1[cellCoo[1]]
-        var2_val <- elisaResult$data$Var2[cellCoo[1]]
-        elisaResult$data$time[elisaResult$data$Var1 == var1_val & elisaResult$data$Var2 == var2_val] <- value.now
+        elisaResult$data$time[elisaResult$data$Var1 == cellCoo[1] & elisaResult$data$Var2 == cellCoo[2]] <- value.now
         
-        # Aggiorna Tablestandcurve
-        elisaResult$Tablestandcurve$Concentrations[elisaResult$Tablestandcurve$exp == elisaResult$data$exp[cellCoo[1]] & 
-                                                     elisaResult$Tablestandcurve$Measures == elisaResult$data$values[cellCoo[1]]] <- value.now
+        elisaResult$Tablestandcurve <- elisaResult$data %>% filter(exp == input$ELISA_standcurve) %>% select(exp, time, values) %>% rename(Concentrations = time,Measures = values)
+
         
         tableExcelColored(session = session,
                           Result = elisaResult, 
