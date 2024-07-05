@@ -19,6 +19,15 @@ server <- function(input, output, session) {
                                        cytotoxResult = NULL,
                                        facsResult = NULL)
   
+  DataStatisticModule = reactiveValues(WB = list(),
+                                       PCR = list(),
+                                       ELISA = list(),
+                                       ENDOC = list(),
+                                       CYTOTOX = list(),
+                                       IF = list(),
+                                       FACS = list(),
+                                       Flag = F)
+  
   DataIntegrationModule <- reactiveValues(dataLoaded = NULL,
                                           data = NULL,
                                           wbTabs = NULL, 
@@ -3668,14 +3677,7 @@ server <- function(input, output, session) {
     }
   })
   
-  #start statistics
-  DataStatisticModule = reactiveValues(WB = list(),
-                                       PRCC = list(),
-                                       ELISA = list(),
-                                       ENDOC = list(),
-                                       CYTOTOX = list(),
-                                       Flag = F)
-  
+  ### start statistics
   DataStatisticresultListen <- reactive({
     reactiveValuesToList(DataStatisticModule)
   })
@@ -3699,90 +3701,215 @@ server <- function(input, output, session) {
     }
   })
   
-  observeEvent(input$loadStatAnalysis_file_Button,{
+  observeEvent(input$loadStatAnalysis_file_Button, {
     manageSpinner(TRUE)
     
-    result <- readfile(
-      filename = input$loadStatAnalysis_file$datapath, 
-      type = "RDsMulti",
-      isFileUploaded = !is.null(input$loadStatAnalysis_file)
-    )
-    
-    if (!is.null(result$error)) {
-      showAlert("Error", result$error, "error", 5000)
+    if (is.null(input$loadStatAnalysis_file)) {
+      showAlert("Error", "No file uploaded", "error", 5000)
       manageSpinner(FALSE)
       return()
     }
     
     datapaths <- input$loadStatAnalysis_file$datapath
     for(dpath in 1:length(datapaths)){
-      mess <- readRDS(datapaths[dpath])
+      file_path <- datapaths[dpath]
       
-      if(!(all(names(mess) %in% names(DataAnalysisModule)) ||
-           all(names(mess) %in% names(elisaResult)) ||
-           all(names(mess) %in% names(wbquantResult)) || 
-           all(names(mess) %in% names(pcrResult)) ||
-           all(names(mess) %in% names(cytotoxResult)) ||
-           all(names(mess) %in% names(endocResult)))){
-        showAlert("Error", paste(mess[["message"]],"\n The file must be RDs saved through the Data Analysis module."), "error", 5000)
+      tryCatch({
+        mess <- readRDS(file_path)
+        names(mess) -> namesRes
+        if("Flags" %in% namesRes) namesRes <- namesRes[namesRes != "Flags"]
+        
+        if(all(namesRes %in% names(wbquantResult)) || all(namesRes %in% names(DataAnalysisModule))) {
+          DataStatisticModule$WB[[dpath]] <- mess$AdjRelDensity %>% mutate(DataSet = dpath)
+        } else if(all(namesRes %in% names(pcrResult)) || all(namesRes %in% names(DataAnalysisModule))) {
+          DataStatisticModule$PCR[[dpath]]  <- mess
+        } else if(all(namesRes %in% names(endocResult)) || all(namesRes %in% names(DataAnalysisModule))) {
+          DataStatisticModule$ENDOC[[dpath]]  <- mess
+        } else if(all(namesRes %in% names(elisaResult)) || all(namesRes %in% names(DataAnalysisModule))) {
+          DataStatisticModule$ELISA[[dpath]]  <- mess
+        } else if(all(namesRes %in% names(cytotoxResult)) || all(namesRes %in% names(DataAnalysisModule))) {
+          DataStatisticModule$CYTOTOX[[dpath]]  <- mess
+        } else if(all(namesRes %in% names(ifResult)) || all(namesRes %in% names(DataAnalysisModule))) {
+          DataStatisticModule$IF[[dpath]]  <- mess
+        } else if(all(namesRes %in% names(facsResult)) || all(namesRes %in% names(DataAnalysisModule))) {
+          DataStatisticModule$FACS[[dpath]]  <- mess
+        } else {
+          showAlert("Error", paste("Unrecognized file structure in", file_path, "\nThe file must be RDS saved through the Data Analysis module."), "error", 5000)
+          manageSpinner(FALSE)
+          return()
+        }
+        DataStatisticModule$Flag <- TRUE
+      }, error = function(e) {
+        showAlert("Error", paste("Failed to read file:", file_path, "\nError message:", e$message), "error", 5000)
         manageSpinner(FALSE)
         return()
-      }
-      
-      DataStatisticModule$Flag <- TRUE
-      
-      if(all(names(mess) %in% names(wbquantResult)) || all(names(mess) %in% names(DataAnalysisModule))){
-        DataStatisticModule$WB[[dpath]] <- mess$AdjRelDensitiy %>% mutate(DataSet = dpath)
-      } else if(all(names(mess) %in% names(pcrResult)) || all(names(mess) %in% names(DataAnalysisModule))){
-        DataAnalysisModule$PRCC[[dpath]]  <- mess
-      } else if(all(names(mess) %in% names(endocResult)) || all(names(mess) %in% names(DataAnalysisModule))){
-        DataAnalysisModule$ENDOC[[dpath]]  <- mess
-      } else if(all(names(mess) %in% names(elisaResult)) || all(names(mess) %in% names(DataAnalysisModule))){
-        DataAnalysisModule$ELISA[[dpath]]  <- mess
-      } else if(all(names(mess) %in% names(cytotoxResult)) || all(names(mess) %in% names(DataAnalysisModule))){
-        DataAnalysisModule$CYTOTOX[[dpath]]  <- mess
-      }
+      })
     }
     manageSpinner(FALSE)
-    showAlert("Success", "The RDs files have been uploaded with success", "success", 2000)
+    showAlert("Success", "The RDS files have been uploaded with success", "success", 2000)
     return(NULL)
   })
   
-  observeEvent(input$StatAnalysis, {
-    if (input$StatAnalysis != "") {
-      DataStatisticModule[[input$StatAnalysis]] -> results
-      do.call(rbind, results) -> results
-      
-      res = resTTest = NULL
-      resplot = ggplot()
+  
+  StatisticalAnalysisResults <- reactive({
+    if (!is.null(input$StatAnalysis) && input$StatAnalysis != "") {
+      results <- DataStatisticModule[[input$StatAnalysis]]
       
       switch(input$StatAnalysis, 
-          "WB" =  {
-          res = results %>%
-            select(DataSet, SampleName, AdjRelDens) %>%
-            mutate(SampleName = gsub(pattern = "^[0-9]. ", x = SampleName, replacement = ""),
-                   ColorSet = as.character(DataSet)) 
-          
-          points = res %>%
-            mutate(SampleName = as.factor(SampleName))
-          
-          stats = points %>%
-            group_by(SampleName) %>%
-            summarise(Mean = mean(AdjRelDens), Sd = sd(AdjRelDens), .groups = 'drop')
-          
-          resplot = ggplot(stats, aes(x = SampleName, y = Mean)) + 
-            geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
-            geom_errorbar(aes(ymin=Mean-Sd, ymax=Mean+Sd), width=.2, position=position_dodge(.9)) +
-            geom_point(data = points, aes(x = SampleName, y = AdjRelDens, color = ColorSet), position = position_jitter(width = 0.2), size = 3) +
-            theme_bw()
-        }
+             "WB" =  {
+               do.call(rbind, results) -> results
+               points <- results %>%
+                 select(DataSet, SampleName, AdjRelDensity) %>%
+                 mutate(SampleName = gsub(pattern = "^[0-9]. ", x = SampleName, replacement = ""),
+                        ColorSet = as.character(DataSet)) 
+               
+               # points <- res %>%
+               #   mutate(SampleName = as.factor(SampleName))
+               
+               stats <- points %>%
+                 group_by(SampleName) %>%
+                 summarise(Mean = mean(AdjRelDensity), sd = sd(AdjRelDensity), .groups = 'drop')
+               
+               resTTest = testStat.function(points %>% select(SampleName,AdjRelDensity) %>% as_tibble())
+               
+               # combo = expand.grid(stats$SampleName,stats$SampleName)
+               # combo = combo[combo$Var1 != combo$Var2, ]
+               # resTTest = do.call(rbind,
+               #                    lapply(1:dim(combo)[1],function(x){
+               #                      sn = combo[x,]
+               #                      ttest = t.test(stats[stats$SampleName == sn$Var1, -1],stats[stats$SampleName == sn$Var2, -1]) 
+               #                      data.frame(Ttest = paste(sn$Var1, " vs ",sn$Var2), 
+               #                                 pValue = ttest$p.value,
+               #                                 conf.int = paste(ttest$conf.int,collapse = ";")
+               #                      )
+               #                    })
+               # )
+               
+               resplot <- ggplot(stats, aes(x = SampleName, y = Mean)) + 
+                 geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
+                 geom_errorbar(aes(ymin=Mean-sd, ymax=Mean+sd), width=.2, position=position_dodge(.9)) +
+                 geom_point(data = points, aes(x = SampleName, y = AdjRelDensity, color = ColorSet),
+                            position = position_jitter(width = 0.2), size = 3) +
+                 theme_bw()+
+                 labs(color = "Sample Name")
+               
+               list(Table = stats%>%rename(ExpCond=SampleName)%>% mutate(Mean = Mean*100), TableTest = resTTest, Plot = resplot)
+             },
+             "IF" = {
+               resultsNew = do.call(rbind,
+                                    lapply(1:length(results),
+                                           function(l){
+                                             d = results[[l]]$SubStatData
+                                             d$File = l
+                                             d
+                                           } 
+                                    ) 
+               )
+               
+               stats = resultsNew %>%
+                 group_by(ExpCond) %>% 
+                 summarise(Mean = mean(Values), sd = sd(Values))
+               
+               
+               resTTest = testStat.function(resultsNew[,c("ExpCond", "Values")])
+               
+               resplot <- ggplot(stats, aes(x = ExpCond, y = Mean)) + 
+                 geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
+                 geom_errorbar(aes(ymin=Mean-sd, ymax=Mean+sd), width=.2, position=position_dodge(.9)) +
+                 geom_point(data = resultsNew, aes(x = ExpCond, y = Values, color = as.factor(File)),
+                            position = position_jitter(width = 0.2), size = 3) +
+                 theme_bw()+
+                 labs(color = "File")
+               
+               list(Table = stats, TableTest = resTTest, Plot = resplot)
+             },
+             "PCR" = {
+               resultsNew = do.call(rbind,
+                                    lapply(1:length(results),
+                                           function(l){
+                                             d = results[[l]]$
+                                               d$File = l
+                                             d
+                                           } 
+                                    ) 
+               )
+               
+               resultsNew = resultsNew %>%  mutate(GeneH = paste(Gene, ", Housekeeping: ",HousekGene))
+               stats = resultsNew %>% group_by(GeneH) %>% summarise(Mean = mean(Q), sd = sd(Q))
+               
+               resTTest = testStat.function(resultsNew[,c("GeneH", "Q")])
+               
+               resplot <- ggplot(stats, aes(x = GeneH, y = Mean)) + 
+                 geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
+                 geom_errorbar(aes(ymin=Mean-sd, ymax=Mean+sd), width=.2, position=position_dodge(.9)) +
+                 geom_point(data = resultsNew, aes(x = GeneH, y = Q, color = as.factor(File)),
+                            position = position_jitter(width = 0.2), size = 3) +
+                 theme_bw()+
+                 labs(color = "File")
+               
+               list(Table = stats%>%rename(ExpCond=GeneH), TableTest = resTTest, Plot = resplot)
+             },
+             "FACS" = {
+               resultsNew = do.call(rbind,
+                                    lapply(1:length(results),
+                                           function(l){
+                                             d = results[[l]]$dataFinal
+                                             d = d %>% tidyr::gather(-Name, key = "Gate",value = "Perc")%>%
+                                               mutate(Perc = as.numeric(gsub(Perc,replacement = "",pattern = "%")))
+                                             d$File = l
+                                             d = merge(d,results[[l]]$ExpConditionDF)
+                                             d
+                                           } 
+                                    ) 
+               )
+               
+               stats = resultsNew %>%
+                 group_by(ExpCondition,Gate) %>% 
+                 summarise(Mean = mean(Perc), sd = sd(Perc))
+               
+               resTTest = do.call(rbind,lapply(unique(resultsNew$Gate),function(g){
+                 results = resultsNew %>% filter(Gate == g)
+                 testStat.function(results[,c("ExpCondition", "Perc")])
+               }))
+               
+               resplot <- ggplot(stats, aes(x = ExpCondition, y = Mean)) + 
+                 geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
+                 geom_errorbar(aes(ymin=Mean-sd, ymax=Mean+sd), width=.2, position=position_dodge(.9)) +
+                 geom_point(data = resultsNew, aes(x = ExpCondition, y = Perc, color = as.factor(File)),
+                            position = position_jitter(width = 0.2), size = 3) +
+                 theme_bw()+
+                 labs(color = "File") %>%
+                 facet_wrap(~Gate)
+               
+               list(Table = stats, TableTest = resTTest, Plot = resplot)
+             }
       )
-      
-      output$TabStat = renderDT({stats})
-      output$PlotStat = renderPlot({resplot})
-      output$TabTTest = renderDT({resTTest})
+    } else {
+      list(Table = NULL,TableTest = NULL, Plot = NULL)
     }
   })
+  
+  # Render statistical analysis results
+  output$TabStat <- renderDT({
+    StatisticalAnalysisResults()$Table
+  },
+  options = list(
+    searching = FALSE,
+    dom = 't' # Only display the table
+  )
+  )
+  
+  output$PlotStat <- renderPlot({
+    StatisticalAnalysisResults()$Plot
+  })
+  
+  output$TabTTest <- renderDT({
+    StatisticalAnalysisResults()$TableTest
+  },
+  options = list(
+    searching = FALSE,
+    dom = 't' # Only display the table
+  ))
   
   ### End Statistic ####
   

@@ -1266,3 +1266,68 @@ UploadRDs <- function(Flag, input, session, output, DataAnalysisModule, Result, 
          }
   )
 }
+
+testStat.function = function(data, var = NULL){
+  vars = data[,1] %>% distinct() %>% pull() 
+  combo = combn( vars , 2 )
+  combo = data.frame(Var1 = combo[1,], Var2 = combo[2,])
+  
+  combo = combo[combo$Var1 != combo$Var2, ]
+  resTTest = do.call(rbind,
+                     lapply(1:dim(combo)[1],function(x){
+                       sn = combo[x,]
+                       ttest = t.test(data[data[,1] ==  sn$Var1 , 2] ,
+                                      data[data[,1] ==  sn$Var2 , 2] ) 
+                       data.frame(Test = "t-test",
+                                  Condition = paste(sn$Var1, " vs ",sn$Var2), 
+                                  pValue = ttest$p.value,
+                                  conf.int = paste(ttest$conf.int,collapse = ";")
+                       )
+                     })
+  )
+  
+  if(length(vars)>2){
+    colnames(data) = c("SampleName","Value")
+    data$SampleName <- as.factor(data$SampleName)
+    # Perform ANOVA
+    anova_model <- aov(Value ~ SampleName, data = data)
+    summary(anova_model) ->a
+    print(a)
+    # Calculate group means and standard errors
+    group_stats <- data %>%
+      group_by(SampleName) %>%
+      summarize(
+        mean = mean(Value),
+        sd = sd(Value),
+        n = n()
+      )
+    
+    # Calculate standard error
+    group_stats <- group_stats %>%
+      mutate(se = sd / sqrt(n))
+    
+    # Calculate the critical value for 95% confidence interval
+    alpha <- 0.05
+    t_critical <- qt(1 - alpha/2, df = df.residual(anova_model))
+    
+    # Calculate confidence intervals
+    group_stats <- group_stats %>%
+      mutate(
+        ci_lower = mean - t_critical * se,
+        ci_upper = mean + t_critical * se
+      )
+    
+    # Display the ANOVA results
+    resTTest = rbind( 
+      data.frame(Test = "Anova",
+                 Condition = paste(anova_model$call)[2] , 
+                 pValue = a[[1]]$`Pr(>F)`[1],
+                 conf.int = paste("-",collapse = ";")),
+      resTTest)
+  }
+  
+  if(!is.null(var))
+    resTTest$Var = var
+  
+  return(resTTest)
+}

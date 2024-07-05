@@ -943,6 +943,7 @@ ui <- dashboardPage(
               )
       ),
       #start statistical analysis
+      #### START statistical analysis ####
       tabItem(tabName = "StatAnalysis_tab",
               h2("Statistical analysis"),
               fluidRow(
@@ -977,14 +978,20 @@ ui <- dashboardPage(
                                label = "Select the analysis:",
                                choices = ""),
                 fluidRow(
+                  column(10,
+                         fluidRow(plotOutput("PlotStat")),
+                         fluidRow(DTOutput("TabStat")),
+                         fluidRow(DTOutput("TabTTest"))
+                  )
+                ),
+                fluidRow(
                   column(12,
-                         plotOutput("PlotStat"),
-                         DTOutput("TabStat"),
-                         DTOutput("TabTTest")
+                         # New download button for statistical analysis
+                         downloadButton("downloadStatisticalAnalysis", "Download Statistical Analysis")
                   )
                 )
               )
-        )
+      )
       )
     )
 )
