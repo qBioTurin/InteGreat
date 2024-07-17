@@ -1267,67 +1267,117 @@ UploadRDs <- function(Flag, input, session, output, DataAnalysisModule, Result, 
   )
 }
 
-testStat.function = function(data, var = NULL){
-  vars = data[,1] %>% distinct() %>% pull() 
-  combo = combn( vars , 2 )
-  combo = data.frame(Var1 = combo[1,], Var2 = combo[2,])
+testStat.function = function(data, var = NULL) {
+  steps <- c()  
   
-  combo = combo[combo$Var1 != combo$Var2, ]
-  resTTest = do.call(rbind,
-                     lapply(1:dim(combo)[1],function(x){
-                       sn = combo[x,]
-                       ttest = t.test(data[data[,1] ==  sn$Var1 , 2] ,
-                                      data[data[,1] ==  sn$Var2 , 2] ) 
-                       data.frame(Test = "t-test",
-                                  Condition = paste(sn$Var1, " vs ",sn$Var2), 
-                                  pValue = ttest$p.value,
-                                  conf.int = paste(ttest$conf.int,collapse = ";")
-                       )
-                     })
-  )
+  # Shapiro-Wilk normality test
+  shapiro_test = shapiro.test(data[, 2])
+  steps <- c(steps, paste("Shapiro-Wilk test performed, p-value:", shapiro_test$p.value))
   
-  if(length(vars)>2){
-    colnames(data) = c("SampleName","Value")
-    data$SampleName <- as.factor(data$SampleName)
-    # Perform ANOVA
-    anova_model <- aov(Value ~ SampleName, data = data)
-    summary(anova_model) ->a
-    print(a)
-    # Calculate group means and standard errors
-    group_stats <- data %>%
-      group_by(SampleName) %>%
-      summarize(
-        mean = mean(Value),
-        sd = sd(Value),
-        n = n()
+  if (shapiro_test$p.value > 0.05) {
+    steps <- c(steps, "Data is normally distributed")
+    
+    vars = data[, 1] %>% distinct() %>% pull()
+    if (length(vars) == 2) {
+      steps <- c(steps, "Two groups, performing t-test")
+      
+      combo = combn(vars, 2)
+      combo = data.frame(Var1 = combo[1, ], Var2 = combo[2, ])
+      combo = combo[combo$Var1 != combo$Var2, ]
+      
+      resTTest = do.call(rbind,
+                         lapply(1:dim(combo)[1], function(x) {
+                           sn = combo[x, ]
+                           ttest = t.test(data[data[, 1] == sn$Var1, 2],
+                                          data[data[, 1] == sn$Var2, 2])
+                           data.frame(Test = "t-test",
+                                      Condition = paste(sn$Var1, " vs ", sn$Var2),
+                                      pValue = ttest$p.value,
+                                      conf.int = paste(ttest$conf.int, collapse = ";")
+                           )
+                         })
       )
+      
+      steps <- c(steps, "t-test completed")
+    } else if (length(vars) > 2) {
+      steps <- c(steps, "More than two groups, performing ANOVA")
+      
+      colnames(data) = c("SampleName", "Value")
+      data$SampleName <- as.factor(data$SampleName)
+      # Perform ANOVA
+      anova_model = aov(Value ~ SampleName, data = data)
+      summary(anova_model) -> a
+      print(a)
+      # Calculate group means and standard errors
+      group_stats = data %>%
+        group_by(SampleName) %>%
+        summarize(
+          mean = mean(Value),
+          sd = sd(Value),
+          n = n()
+        )
+      
+      # Calculate standard error
+      group_stats = group_stats %>%
+        mutate(se = sd / sqrt(n))
+      
+      # Calculate critical value for 95% confidence interval
+      alpha = 0.05
+      t_critical = qt(1 - alpha/2, df = df.residual(anova_model))
+      
+      # Calculate confidence intervals
+      group_stats = group_stats %>%
+        mutate(
+          ci_lower = mean - t_critical * se,
+          ci_upper = mean + t_critical * se
+        )
+      
+      # Display ANOVA results
+      resTTest = data.frame(Test = "Anova",
+                            Condition = paste(anova_model$call)[2],
+                            pValue = a[[1]]$`Pr(>F)`[1],
+                            conf.int = paste("-", collapse = ";"))
+      
+      steps <- c(steps, "ANOVA completed")
+    } else {
+      steps <- c(steps, "Invalid number of groups for t-test or ANOVA")
+      resTTest = data.frame(Test = "Error", Condition = "Invalid number of groups", pValue = NA, conf.int = NA)
+    }
     
-    # Calculate standard error
-    group_stats <- group_stats %>%
-      mutate(se = sd / sqrt(n))
+    if (!is.null(var))
+      resTTest$Var = var
     
-    # Calculate the critical value for 95% confidence interval
-    alpha <- 0.05
-    t_critical <- qt(1 - alpha/2, df = df.residual(anova_model))
+    return(list(resTTest = resTTest, steps = steps))
+  } else {
+    steps <- c(steps, "Data is not normally distributed")
     
-    # Calculate confidence intervals
-    group_stats <- group_stats %>%
-      mutate(
-        ci_lower = mean - t_critical * se,
-        ci_upper = mean + t_critical * se
-      )
-    
-    # Display the ANOVA results
-    resTTest = rbind( 
-      data.frame(Test = "Anova",
-                 Condition = paste(anova_model$call)[2] , 
-                 pValue = a[[1]]$`Pr(>F)`[1],
-                 conf.int = paste("-",collapse = ";")),
-      resTTest)
+    vars = data[, 1] %>% distinct() %>% pull()
+    if (length(vars) > 2) {
+      steps <- c(steps, "More than two groups, performing Kruskal-Wallis test")
+      
+      # Perform Kruskal-Wallis test
+      kruskal_test = kruskal.test(data[, 2] ~ data[, 1])
+      resKruskal = data.frame(Test = "Kruskal-Wallis",
+                              Condition = paste(kruskal_test$data.name),
+                              pValue = kruskal_test$p.value,
+                              conf.int = paste("-", collapse = ";"))
+      steps <- c(steps, "Kruskal-Wallis test completed")
+      return(list(resTTest = resKruskal, steps = steps))
+    } else if (length(vars) == 2) {
+      steps <- c(steps, "Two groups, performing Wilcoxon test")
+      
+      # Perform Wilcoxon test
+      wilcox_test = wilcox.test(data[data[, 1] == vars[1], 2],
+                                data[data[, 1] == vars[2], 2])
+      resWilcox = data.frame(Test = "Wilcoxon",
+                             Condition = paste(vars[1], " vs ", vars[2]),
+                             pValue = wilcox_test$p.value,
+                             conf.int = paste("-", collapse = ";"))
+      steps <- c(steps, "Wilcoxon test completed")
+      return(list(resTTest = resWilcox, steps = steps))
+    } else {
+      steps <- c(steps, "Invalid number of groups")
+      return(list(resTTest = data.frame(Test = "Error", Condition = "Invalid number of groups", pValue = NA, conf.int = NA), steps = steps))
+    }
   }
-  
-  if(!is.null(var))
-    resTTest$Var = var
-  
-  return(resTTest)
 }
