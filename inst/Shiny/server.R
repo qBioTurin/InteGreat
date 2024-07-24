@@ -5016,39 +5016,104 @@ server <- function(input, output, session) {
                points <- results %>%
                  select(DataSet, SampleName, AdjRelDensity) %>%
                  mutate(SampleName = gsub(pattern = "^[0-9]. ", x = SampleName, replacement = ""),
-                        ColorSet = as.character(DataSet)) 
-               
-               # points <- res %>%
-               #   mutate(SampleName = as.factor(SampleName))
+                        SampleName = trimws(SampleName),  # Rimuove spazi iniziali e finali
+                        ColorSet = as.character(DataSet))
                
                stats <- points %>%
                  group_by(SampleName) %>%
                  summarise(Mean = mean(AdjRelDensity), sd = sd(AdjRelDensity), .groups = 'drop')
                
-               resTTest = testStat.function(points %>% select(SampleName,AdjRelDensity) %>% as_tibble())
+               res <- testStat.function(points %>% select(SampleName, AdjRelDensity) %>% as_tibble())
+               resTTest <- res$resTTest
+               resANOVA <- res$anova
+               resPairwise <- res$pairwise
+               steps <- res$steps
                
-               # combo = expand.grid(stats$SampleName,stats$SampleName)
-               # combo = combo[combo$Var1 != combo$Var2, ]
-               # resTTest = do.call(rbind,
-               #                    lapply(1:dim(combo)[1],function(x){
-               #                      sn = combo[x,]
-               #                      ttest = t.test(stats[stats$SampleName == sn$Var1, -1],stats[stats$SampleName == sn$Var2, -1]) 
-               #                      data.frame(Ttest = paste(sn$Var1, " vs ",sn$Var2), 
-               #                                 pValue = ttest$p.value,
-               #                                 conf.int = paste(ttest$conf.int,collapse = ";")
-               #                      )
-               #                    })
-               # )
+               print("resTTest:")
+               print(resTTest)
+               print("resANOVA:")
+               print(resANOVA)
+               print("resPairwise:")
+               print(resPairwise)
+               
+               ano <- if (!is.null(resANOVA)) resANOVA$pValue else NA
+               ano_txt <- if (ano < 0.001) {
+                 "P value from anova < 0.001"
+               } else if (!is.na(ano)) {
+                 signif(ano, digits = 3) %>% paste0("P value from anova = ", .)
+               } else {
+                 "No ANOVA result"
+               }
                
                resplot <- ggplot(stats, aes(x = SampleName, y = Mean)) + 
                  geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
                  geom_errorbar(aes(ymin=Mean-sd, ymax=Mean+sd), width=.2, position=position_dodge(.9)) +
                  geom_point(data = points, aes(x = SampleName, y = AdjRelDensity, color = ColorSet),
                             position = position_jitter(width = 0.2), size = 3) +
-                 theme_bw()+
-                 labs(color = "Sample Name")
+                 theme_bw() +
+                 labs(title = "Results", subtitle = ano_txt, y = "AdjRelDensity", x = "SampleName", color = "Sample Name") +
+                 annotate("text", x = Inf, y = Inf, label = "ns: p > 0.05\n*: p <= 0.05\n**: p <= 0.01\n***: p <= 0.001", 
+                          hjust = 1.1, vjust = 1.5, size = 5, color = "black")
                
-               list(Table = stats%>%rename(ExpCond=SampleName)%>% mutate(Mean = Mean*100), TableTest = resTTest, Plot = resplot)
+               if (!is.null(resPairwise) && ano < 0.05) {
+                 resPairwise <- resPairwise %>%
+                   separate(Condition, into = c("group1", "group2"), sep = " vs ") %>%
+                   mutate(group1 = trimws(group1),  # Rimuove spazi iniziali e finali
+                          group2 = trimws(group2),
+                          stars = cut(pValue, breaks = c(-Inf, 0.001, 0.01, 0.05, Inf), labels = c("***", "**", "*", "ns")))
+                 
+                 # Generare tutte le combinazioni possibili
+                 all_combinations <- combn(unique(stats$SampleName), 2, simplify = FALSE)
+                 
+                 post_hoc_pairs <- lapply(all_combinations, function(pair) {
+                   pair <- unlist(pair)
+                   c(trimws(pair[1]), trimws(pair[2]))
+                 })
+                 
+                 # Debug
+                 print("post_hoc_pairs (all combinations):")
+                 print(post_hoc_pairs)
+                 
+                 # Annotare tutte le combinazioni, incluse quelle non significative
+                 annotations <- sapply(post_hoc_pairs, function(pair) {
+                   idx <- which((resPairwise$group1 == pair[1] & resPairwise$group2 == pair[2]) |
+                                  (resPairwise$group1 == pair[2] & resPairwise$group2 == pair[1]))
+                   if (length(idx) > 0) {
+                     as.character(resPairwise$stars[idx])
+                   } else {
+                     "ns"
+                   }
+                 })
+                 
+                 # Debug
+                 print("annotations (all combinations):")
+                 print(annotations)
+                 
+                 y_max <- max(stats$Mean + stats$sd, na.rm = TRUE)
+                 y_pos <- seq(y_max + 0.1, y_max + 0.1 + 0.1 * length(post_hoc_pairs), length.out = length(post_hoc_pairs))
+                 
+                 if (length(post_hoc_pairs) > 0 && length(annotations) > 0) {
+                   resplot <- resplot + 
+                     ggsignif::geom_signif(
+                       comparisons = post_hoc_pairs,
+                       y_position = y_pos,
+                       annotations = annotations,
+                       tip_length = 0.01,
+                       textsize = 8 / 1.5,
+                       vjust = 0.8
+                     )
+                 } else {
+                   print("No valid post-hoc comparisons or annotations to plot.")
+                 }
+               } else {
+                 print("No pairwise comparisons to plot.")
+               }
+               
+               output$analysis_output <- renderText({
+                 paste(steps, collapse = "\n")
+               })
+               
+               list(Table = stats %>% rename(ExpCond = SampleName) %>% mutate(Mean = Mean * 100), TableTest = resTTest, Plot = resplot)
              },
              "IF" = {
                resultsNew = do.call(rbind,
@@ -5065,8 +5130,9 @@ server <- function(input, output, session) {
                  group_by(ExpCond) %>% 
                  summarise(Mean = mean(Values), sd = sd(Values))
                
-               
-               resTTest = testStat.function(resultsNew[,c("ExpCond", "Values")])
+               res <- testStat.function(resultsNew[,c("ExpCond", "Values")])
+               resTTest <- res$resTTest
+               steps <- res$steps
                
                resplot <- ggplot(stats, aes(x = ExpCond, y = Mean)) + 
                  geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
@@ -5092,7 +5158,9 @@ server <- function(input, output, session) {
                resultsNew = resultsNew %>%  mutate(GeneH = paste(Gene, ", Housekeeping: ",HousekGene))
                stats = resultsNew %>% group_by(GeneH) %>% summarise(Mean = mean(Q), sd = sd(Q))
                
-               resTTest = testStat.function(resultsNew[,c("GeneH", "Q")])
+               res <- testStat.function(resultsNew[,c("GeneH", "Q")])
+               resTTest <- res$resTTest
+               steps <- res$steps
                
                resplot <- ggplot(stats, aes(x = GeneH, y = Mean)) + 
                  geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
@@ -5105,38 +5173,40 @@ server <- function(input, output, session) {
                list(Table = stats%>%rename(ExpCond=GeneH), TableTest = resTTest, Plot = resplot)
              },
              "FACS" = {
-               resultsNew = do.call(rbind,
-                                    lapply(1:length(results),
-                                           function(l){
-                                             d = results[[l]]$dataFinal
-                                             d = d %>% tidyr::gather(-Name, key = "Gate",value = "Perc")%>%
-                                               mutate(Perc = as.numeric(gsub(Perc,replacement = "",pattern = "%")))
-                                             d$File = l
-                                             d = merge(d,results[[l]]$ExpConditionDF)
-                                             d
-                                           } 
-                                    ) 
+               resultsNew <- do.call(rbind,
+                                     lapply(1:length(results), function(l) {
+                                       d <- results[[l]]$dataFinal
+                                       d <- d %>%
+                                         tidyr::gather(-Name, key = "Gate", value = "Perc") %>%
+                                         mutate(Perc = as.numeric(gsub("%", "", Perc)))
+                                       d$File <- l
+                                       d <- merge(d, results[[l]]$ExpConditionDF)
+                                       d
+                                     })
                )
                
-               stats = resultsNew %>%
-                 group_by(ExpCondition,Gate) %>% 
-                 summarise(Mean = mean(Perc), sd = sd(Perc))
+               stats <- resultsNew %>%
+                 group_by(ExpCondition, Gate) %>%
+                 summarise(Mean = mean(Perc), sd = sd(Perc), .groups = 'drop')
                
-               resTTest = do.call(rbind,lapply(unique(resultsNew$Gate),function(g){
-                 results = resultsNew %>% filter(Gate == g)
-                 testStat.function(results[,c("ExpCondition", "Perc")])
-               }))
+               resList <- lapply(unique(resultsNew$Gate), function(g) {
+                 gate_results <- resultsNew %>% filter(Gate == g)
+                 testStat.function(gate_results[, c("ExpCondition", "Perc")])
+               })
+               
+               resTTest <- do.call(rbind, lapply(resList, function(res) res$resTTest))
+               steps <- unlist(lapply(resList, function(res) res$steps))
                
                resplot <- ggplot(stats, aes(x = ExpCondition, y = Mean)) + 
-                 geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
-                 geom_errorbar(aes(ymin=Mean-sd, ymax=Mean+sd), width=.2, position=position_dodge(.9)) +
+                 geom_bar(stat = "identity", color = "black", fill = "#BAE1FF", position = position_dodge()) +
+                 geom_errorbar(aes(ymin = Mean - sd, ymax = Mean + sd), width = .2, position = position_dodge(.9)) +
                  geom_point(data = resultsNew, aes(x = ExpCondition, y = Perc, color = as.factor(File)),
                             position = position_jitter(width = 0.2), size = 3) +
-                 theme_bw()+
-                 labs(color = "File") %>%
-                 facet_wrap(~Gate)
+                 theme_bw() +
+                 labs(color = "File") +
+                 facet_wrap(~ Gate)
                
-               list(Table = stats, TableTest = resTTest, Plot = resplot)
+               list(Table = stats, TableTest = resTTest, Plot = resplot, Steps = steps)
              }
       )
     } else {

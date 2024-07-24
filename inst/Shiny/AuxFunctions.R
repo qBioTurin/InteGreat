@@ -1666,82 +1666,112 @@ UploadRDs = function(Flag, session, output,
 #     }
 #   }
 # }
-testStat.function = function(data, var = NULL){
-  data_shapiro <- data
-  data_shapiro$Value <- as.numeric(gsub("^\\s+|\\s+$", "", as.character(data[[2]])))
+
+testStat.function <- function(data) {
+  steps <- ""
+  step_counter <- 1
+  resTTest <- NULL
+  resANOVA <- NULL
+  resPairwise <- NULL
+  
+  data$Value <- as.numeric(gsub("^\\s+|\\s+$", "", as.character(data[[2]])))
+  
+  shapiro_results <- data %>%
+    group_by(data[[1]]) %>%
+    filter(n() >= 3) %>%
+    summarize(
+      p.value = ifelse(
+        length(unique(Value)) > 1, 
+        shapiro.test(Value)$p.value, 
+        NA
+      ),
+      message = ifelse(
+        length(unique(Value)) > 1, 
+        "", 
+        "All values are identical or less than 3 samples"
+      )
+    )
+  
+  steps <- c(steps, paste("Step", step_counter, ". Shapiro-Wilk test performed for each group:\n"))
+  step_counter <- step_counter + 1
+  for (i in 1:nrow(shapiro_results)) {
+    if (is.na(shapiro_results$p.value[i])) {
+      steps <- c(steps, paste("  Group", shapiro_results[[1]][i], ": p-value = NA (", shapiro_results$message[i], ")\n"))
+    } else {
+      steps <- c(steps, paste("  Group", shapiro_results[[1]][i], ": p-value =", shapiro_results$p.value[i], "\n"))
+    }
+  }
   
   group_counts <- data %>%
     group_by(data[[1]]) %>%
     summarize(count = n())
   
-  shapiro_result <- shapiro.test(data_shapiro$Value)
-  print(shapiro_result$p.value)
-  
-  if (all(group_counts$count < 30) || shapiro_result$p.value > 0.05) {
-    print("sono dentro")
-    vars = data[,1] %>% distinct() %>% pull() 
-    combo = combn( vars , 2 )
-    combo = data.frame(Var1 = combo[1,], Var2 = combo[2,])
+  if (all(group_counts$count < 30) || all(shapiro_results$p.value > 0.05, na.rm = TRUE)) {
+    step_counter <- step_counter + 1  
     
-    combo = combo[combo$Var1 != combo$Var2, ]
-    resTTest = do.call(rbind,
-                       lapply(1:dim(combo)[1],function(x){
-                         sn = combo[x,]
-                         ttest = t.test(data[data[,1] ==  sn$Var1 , 2] ,
-                                        data[data[,1] ==  sn$Var2 , 2] ) 
-                         data.frame(Test = "t-test",
-                                    Condition = paste(sn$Var1, " vs ",sn$Var2), 
-                                    pValue = ttest$p.value,
-                                    conf.int = paste(ttest$conf.int,collapse = ";")
-                         )
-                       })
-    )
+    vars <- data[,1] %>% distinct() %>% pull() 
     
-    if(length(vars)>2){
-      colnames(data) = c("SampleName","Value")
+    if (length(vars) == 2) {
+      steps <- c(steps, paste("Step ", step_counter, ". there are 2 groups, I will use t-test for analysis", "\n"))
+      step_counter <- step_counter + 1  
+      combo <- combn(vars, 2)
+      combo <- data.frame(Var1 = combo[1,], Var2 = combo[2,])
+      
+      combo <- combo[combo$Var1 != combo$Var2, ]
+      resTTest <- do.call(rbind,
+                          lapply(1:dim(combo)[1], function(x){
+                            sn <- combo[x,]
+                            ttest <- t.test(data[data[,1] == sn$Var1, "Value"],
+                                            data[data[,1] == sn$Var2, "Value"]) 
+                            data.frame(Test = "t-test",
+                                       Condition = paste(sn$Var1, " vs ", sn$Var2), 
+                                       pValue = ttest$p.value,
+                                       conf.int = paste(ttest$conf.int, collapse = ";")
+                            )
+                          })
+      )
+    } else if(length(vars) > 2){
+      steps <- c(steps, paste("Step ", step_counter, ". groups are more than 2, I will use ANOVA for analysis", "\n"))
+      step_counter <- step_counter + 1  
+      colnames(data) <- c("SampleName", "Value")
       data$SampleName <- as.factor(data$SampleName)
-      # Perform ANOVA
+      
       anova_model <- aov(Value ~ SampleName, data = data)
-      summary(anova_model) ->a
-      print(a)
-      # Calculate group means and standard errors
-      group_stats <- data %>%
-        group_by(SampleName) %>%
-        summarize(
-          mean = mean(Value),
-          sd = sd(Value),
-          n = n()
+      summary(anova_model) -> a
+      
+      resANOVA <- data.frame(Test = "Anova",
+                             Condition = paste(anova_model$call)[2], 
+                             pValue = a[[1]]$`Pr(>F)`[1],
+                             conf.int = paste("-", collapse = ";"))
+      
+      if (resANOVA$pValue < 0.05) {
+        steps <- c(steps, paste("Step ", step_counter, ". ANOVA p-value <", resANOVA$pValue, ", performing pairwise t-tests", "\n"))
+        step_counter <- step_counter + 1  
+        
+        combo <- combn(vars, 2)
+        combo <- data.frame(Var1 = combo[1,], Var2 = combo[2,])
+        
+        combo <- combo[combo$Var1 != combo$Var2, ]
+        resPairwise <- do.call(rbind,
+                               lapply(1:dim(combo)[1], function(x){
+                                 sn <- combo[x,]
+                                 ttest <- t.test(data[data[,1] == sn$Var1, "Value"],
+                                                 data[data[,1] == sn$Var2, "Value"]) 
+                                 data.frame(Test = "t-test",
+                                            Condition = paste(sn$Var1, " vs ", sn$Var2), 
+                                            pValue = ttest$p.value,
+                                            conf.int = paste(ttest$conf.int, collapse = ";")
+                                 )
+                               })
         )
-      
-      # Calculate standard error
-      group_stats <- group_stats %>%
-        mutate(se = sd / sqrt(n))
-      
-      # Calculate the critical value for 95% confidence interval
-      alpha <- 0.05
-      t_critical <- qt(1 - alpha/2, df = df.residual(anova_model))
-      
-      # Calculate confidence intervals
-      group_stats <- group_stats %>%
-        mutate(
-          ci_lower = mean - t_critical * se,
-          ci_upper = mean + t_critical * se
-        )
-      
-      # Display the ANOVA results
-      resTTest = rbind( 
-        data.frame(Test = "Anova",
-                   Condition = paste(anova_model$call)[2] , 
-                   pValue = a[[1]]$`Pr(>F)`[1],
-                   conf.int = paste("-",collapse = ";")),
-        resTTest)
+      } else {
+        steps <- c(steps, paste("Step ", step_counter, ". ANOVA p-value >=", resANOVA$pValue, ", no pairwise t-tests performed", "\n"))
+      }
     }
     
-    if(!is.null(var))
-      resTTest$Var = var
-    
-    return(resTTest)
+    return(list(resTTest = resTTest, anova = resANOVA, pairwise = resPairwise, steps = steps))
+  } else {
+    steps <- c(steps, "Non-normal data or large sample sizes, alternative analysis required.\n")
+    return(list(steps = steps))
   }
 }
-
-
