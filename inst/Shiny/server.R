@@ -5224,7 +5224,6 @@ server <- function(input, output, session) {
         HTML(steps_formatted)
       })
       
-      
       return(list(Table = stats, TableTest = resTTest, Plot = resplot))
     } else {
       return(list(Table = NULL, TableTest = NULL, Plot = NULL))
@@ -5253,6 +5252,75 @@ server <- function(input, output, session) {
     searching = FALSE,
     dom = 't' # Only display the table
   ))
+  
+  create_decision_tree <- function() {
+    # Dati di esempio per l'albero decisionale
+    data <- tibble(
+      from = c("Start",
+               "Start", "Start",
+               "Decision A", "Decision A",
+               "Decision B", "Decision B",
+               "Decision C", "Decision C"),
+      to = c("Decision A", "Decision B", "Decision C",
+             "Outcome 1", "Outcome 2",
+             "Outcome 3", "Outcome 4",
+             "Outcome 5", "Outcome 6")
+    )
+    
+    # Creare il grafo con igraph
+    graph <- graph_from_data_frame(data)
+    
+    # Ottenere le posizioni dei nodi
+    layout <- layout_as_tree(graph)
+    layout <- as.data.frame(layout)
+    colnames(layout) <- c("x", "y")
+    layout$name <- V(graph)$name
+    
+    # Preparare i dati per geom_rect
+    rect_data <- layout %>%
+      mutate(xmin = x - 0.25, xmax = x + 0.25,
+             ymin = y - 0.25, ymax = y + 0.25,
+             fill = ifelse(name %in% c("Start", "Decision A", "Outcome 1"), "green", "grey"))
+    
+    # Ottenere i dati degli archi
+    edges <- get.data.frame(graph, what = "edges")
+    colnames(edges) <- c("from", "to")
+    
+    # Unire gli archi con il layout per ottenere le coordinate per il tracciamento
+    edges <- edges %>%
+      left_join(layout, by = c("from" = "name")) %>%
+      rename(x_from = x, y_from = y) %>%
+      left_join(layout, by = c("to" = "name")) %>%
+      rename(x_to = x, y_to = y)
+    
+    # Calcolare le coordinate delle frecce ai bordi dei rettangoli
+    edges <- edges %>%
+      rowwise() %>%
+      mutate(
+        angle = atan2(y_to - y_from, x_to - x_from),
+        x_from_edge = x_from + 0.25 * cos(angle),
+        y_from_edge = y_from + 0.25 * sin(angle),
+        x_to_edge = x_to - 0.25 * cos(angle),
+        y_to_edge = y_to - 0.25 * sin(angle)
+      )
+    
+    # Plotting the tree
+    p <- ggplot() +
+      geom_rect(data = rect_data, mapping = aes(xmin = xmin, ymin = ymin, xmax = xmax, ymax = ymax, fill = fill), alpha = 0.5, color = "black") +
+      geom_text(data = layout, mapping = aes(x = x, y = y, label = name), size = 5) +
+      geom_segment(data = edges, aes(x = x_from_edge, y = y_from_edge, xend = x_to_edge, yend = y_to_edge), arrow = arrow(length = unit(4, 'mm'))) + 
+      scale_fill_manual(values = c("green" = "green", "grey" = "grey")) +
+      theme_void() +
+      theme(legend.position = "none") # Rimuove la leggenda
+    
+    return(p)
+  }
+  
+  # Output del grafico
+  output$decision_tree_plot <- renderPlot({
+    create_decision_tree()
+  })
+  
   
   ### End Statistic ####
   

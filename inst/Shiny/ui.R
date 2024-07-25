@@ -9,6 +9,9 @@ library(knitr)
 library(ggplot2)
 library(ggpubr)
 library(ggsignif)
+library(tibble)
+library(igraph)
+library(ggraph)
 library(tidyr)
 library(shinythemes)
 library(OpenImageR)
@@ -1586,11 +1589,12 @@ ui <- dashboardPage(
                 box(
                   width = 12,
                   collapsible = TRUE,
-                  collapsed = TRUE,
+                  collapsed = FALSE,
                   title = "Statistical decision",
                   fluidRow(
                     column(9,
-                           style = "border-right: 1px solid #000000;", 
+                           style = "border-right: 1px solid #000000;",
+                           plotOutput("decision_tree_plot") # Aggiunge il plot qui
                     ),
                     column(3,
                            tags$style(HTML("#analysis_output {font-size: 12px; font-style: italic; }")),
