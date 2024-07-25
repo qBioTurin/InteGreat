@@ -1585,13 +1585,16 @@ ui <- dashboardPage(
               fluidRow(
                 box(
                   width = 12,
-                  collapsible = T,
-                  collapsed = T,
+                  collapsible = TRUE,
+                  collapsed = TRUE,
                   title = "Statistical decision",
                   fluidRow(
-                    column(6, offset = 3,
-                           tags$style(HTML("#analysis_output { font-weight: bold; }")),
-                           textOutput("analysis_output")
+                    column(9,
+                           style = "border-right: 1px solid #000000;", 
+                    ),
+                    column(3,
+                           tags$style(HTML("#analysis_output {font-size: 12px; font-style: italic; }")),
+                           htmlOutput("analysis_output")
                     )
                   )
                 )

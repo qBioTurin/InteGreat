@@ -1707,7 +1707,8 @@ testStat.function <- function(data) {
     summarize(count = n())
   
   if (all(group_counts$count < 30) || all(shapiro_results$p.value > 0.05, na.rm = TRUE)) {
-    step_counter <- step_counter + 1  
+    steps <- c(steps, paste("Step ", step_counter, ". the data is normalized", "\n"))
+    step_counter <- step_counter + 1 
     
     vars <- data[,1] %>% distinct() %>% pull() 
     
@@ -1769,9 +1770,70 @@ testStat.function <- function(data) {
       }
     }
     
-    return(list(resTTest = resTTest, anova = resANOVA, pairwise = resPairwise, steps = steps))
+    return(list(resTTest = resTTest, test = resANOVA, pairwise = resPairwise, steps = steps))
   } else {
-    steps <- c(steps, "Non-normal data or large sample sizes, alternative analysis required.\n")
-    return(list(steps = steps))
+    steps <- c(steps, paste("Step ", step_counter, ". the data is not normalized", "\n"))
+    step_counter <- step_counter + 1 
+    
+    vars <- data[,1] %>% distinct() %>% pull()
+    
+    if (length(vars) == 2) {
+      steps <- c(steps, paste("Step ", step_counter, ". there are 2 groups, I will use Wilcoxon test for analysis", "\n"))
+      step_counter <- step_counter + 1  
+      combo <- combn(vars, 2)
+      combo <- data.frame(Var1 = combo[1,], Var2 = combo[2,])
+      
+      combo <- combo[combo$Var1 != combo$Var2, ]
+      resTTest <- do.call(rbind,
+                          lapply(1:dim(combo)[1], function(x){
+                            sn <- combo[x,]
+                            wilcox_test <- wilcox.test(data[data[,1] == sn$Var1, "Value"],
+                                                       data[data[,1] == sn$Var2, "Value"]) 
+                            data.frame(Test = "Wilcoxon",
+                                       Condition = paste(sn$Var1, " vs ", sn$Var2), 
+                                       pValue = wilcox_test$p.value,
+                                       conf.int = paste(wilcox_test$conf.int, collapse = ";")
+                            )
+                          })
+      )
+    } else if(length(vars) > 2){
+      steps <- c(steps, paste("Step ", step_counter, ". groups are more than 2, I will use Kruskal-Wallis for analysis", "\n"))
+      step_counter <- step_counter + 1  
+      colnames(data) <- c("SampleName", "Value")
+      data$SampleName <- as.factor(data$SampleName)
+      
+      kruskal_test <- kruskal.test(Value ~ SampleName, data = data)
+      
+      resKRUSKAL <- data.frame(Test = "Kruskal-Wallis",
+                             Condition = paste(kruskal_test$call)[2], 
+                             pValue = kruskal_test$p.value,
+                             conf.int = paste("-", collapse = ";"))
+      
+      if (resKRUSKAL$pValue < 0.05) {
+        steps <- c(steps, paste("Step ", step_counter, ". Kruskal-Wallis p-value <", resKRUSKAL$pValue, ", performing pairwise Wilcoxon tests", "\n"))
+        step_counter <- step_counter + 1  
+        
+        combo <- combn(vars, 2)
+        combo <- data.frame(Var1 = combo[1,], Var2 = combo[2,])
+        
+        combo <- combo[combo$Var1 != combo$Var2, ]
+        resPairwise <- do.call(rbind,
+                               lapply(1:dim(combo)[1], function(x){
+                                 sn <- combo[x,]
+                                 wilcox_test <- wilcox.test(data[data[,1] == sn$Var1, "Value"],
+                                                            data[data[,1] == sn$Var2, "Value"]) 
+                                 data.frame(Test = "Wilcoxon",
+                                            Condition = paste(sn$Var1, " vs ", sn$Var2), 
+                                            pValue = wilcox_test$p.value,
+                                            conf.int = paste(wilcox_test$conf.int, collapse = ";")
+                                 )
+                               })
+        )
+      } else {
+        steps <- c(steps, paste("Step ", step_counter, ". Kruskal-Wallis p-value >=", resKRUSKAL$pValue, ", no pairwise Wilcoxon tests performed", "\n"))
+      }
+    }
+    
+    return(list(resTTest = resTTest, test = resKRUSKAL, pairwise = resPairwise, steps = steps))
   }
 }

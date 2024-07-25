@@ -5009,14 +5009,20 @@ server <- function(input, output, session) {
   StatisticalAnalysisResults <- reactive({
     if (!is.null(input$StatAnalysis) && input$StatAnalysis != "") {
       results <- DataStatisticModule[[input$StatAnalysis]]
+      resTTest <- NULL
+      resMainTest <- NULL
+      resPairwise <- NULL
+      steps <- NULL
+      resplot <- NULL
+      stats <- NULL
       
       switch(input$StatAnalysis, 
-             "WB" =  {
+             "WB" = {
                do.call(rbind, results) -> results
                points <- results %>%
                  select(DataSet, SampleName, AdjRelDensity) %>%
                  mutate(SampleName = gsub(pattern = "^[0-9]. ", x = SampleName, replacement = ""),
-                        SampleName = trimws(SampleName),  # Rimuove spazi iniziali e finali
+                        SampleName = trimws(SampleName),
                         ColorSet = as.character(DataSet))
                
                stats <- points %>%
@@ -5025,24 +5031,15 @@ server <- function(input, output, session) {
                
                res <- testStat.function(points %>% select(SampleName, AdjRelDensity) %>% as_tibble())
                resTTest <- res$resTTest
-               resANOVA <- res$anova
+               resMainTest <- res$test
                resPairwise <- res$pairwise
                steps <- res$steps
                
-               print("resTTest:")
-               print(resTTest)
-               print("resANOVA:")
-               print(resANOVA)
-               print("resPairwise:")
-               print(resPairwise)
-               
-               ano <- if (!is.null(resANOVA)) resANOVA$pValue else NA
-               ano_txt <- if (ano < 0.001) {
-                 "P value from anova < 0.001"
-               } else if (!is.na(ano)) {
-                 signif(ano, digits = 3) %>% paste0("P value from anova = ", .)
+               main_test_pvalue <- if (!is.null(resMainTest)) resMainTest$pValue else NA
+               main_test_txt <- if (is.null(resPairwise)) {
+                 signif(main_test_pvalue, digits = 3) %>% paste0("P value from main test = ", .)
                } else {
-                 "No ANOVA result"
+                 ""
                }
                
                resplot <- ggplot(stats, aes(x = SampleName, y = Mean)) + 
@@ -5051,88 +5048,37 @@ server <- function(input, output, session) {
                  geom_point(data = points, aes(x = SampleName, y = AdjRelDensity, color = ColorSet),
                             position = position_jitter(width = 0.2), size = 3) +
                  theme_bw() +
-                 labs(title = "Results", subtitle = ano_txt, y = "AdjRelDensity", x = "SampleName", color = "Sample Name") +
-                 annotate("text", x = Inf, y = Inf, label = "ns: p > 0.05\n*: p <= 0.05\n**: p <= 0.01\n***: p <= 0.001", 
+                 labs(title = "Results", subtitle = main_test_txt, y = "AdjRelDensity", x = "SampleName", color = "Sample Name") +
+                 annotate("text", x = Inf, y = Inf, label = "ns: p > 0.05\n*: p <= 0.05\n**: p <= 0.01\n ***: p <= 0.001", 
                           hjust = 1.1, vjust = 1.5, size = 5, color = "black")
-               
-               if (!is.null(resPairwise) && ano < 0.05) {
-                 resPairwise <- resPairwise %>%
-                   separate(Condition, into = c("group1", "group2"), sep = " vs ") %>%
-                   mutate(group1 = trimws(group1),  # Rimuove spazi iniziali e finali
-                          group2 = trimws(group2),
-                          stars = cut(pValue, breaks = c(-Inf, 0.001, 0.01, 0.05, Inf), labels = c("***", "**", "*", "ns")))
-                 
-                 # Generare tutte le combinazioni possibili
-                 all_combinations <- combn(unique(stats$SampleName), 2, simplify = FALSE)
-                 
-                 post_hoc_pairs <- lapply(all_combinations, function(pair) {
-                   pair <- unlist(pair)
-                   c(trimws(pair[1]), trimws(pair[2]))
-                 })
-                 
-                 # Debug
-                 print("post_hoc_pairs (all combinations):")
-                 print(post_hoc_pairs)
-                 
-                 # Annotare tutte le combinazioni, incluse quelle non significative
-                 annotations <- sapply(post_hoc_pairs, function(pair) {
-                   idx <- which((resPairwise$group1 == pair[1] & resPairwise$group2 == pair[2]) |
-                                  (resPairwise$group1 == pair[2] & resPairwise$group2 == pair[1]))
-                   if (length(idx) > 0) {
-                     as.character(resPairwise$stars[idx])
-                   } else {
-                     "ns"
-                   }
-                 })
-                 
-                 # Debug
-                 print("annotations (all combinations):")
-                 print(annotations)
-                 
-                 y_max <- max(stats$Mean + stats$sd, na.rm = TRUE)
-                 y_pos <- seq(y_max + 0.1, y_max + 0.1 + 0.1 * length(post_hoc_pairs), length.out = length(post_hoc_pairs))
-                 
-                 if (length(post_hoc_pairs) > 0 && length(annotations) > 0) {
-                   resplot <- resplot + 
-                     ggsignif::geom_signif(
-                       comparisons = post_hoc_pairs,
-                       y_position = y_pos,
-                       annotations = annotations,
-                       tip_length = 0.01,
-                       textsize = 8 / 1.5,
-                       vjust = 0.8
-                     )
-                 } else {
-                   print("No valid post-hoc comparisons or annotations to plot.")
-                 }
-               } else {
-                 print("No pairwise comparisons to plot.")
-               }
-               
-               output$analysis_output <- renderText({
-                 paste(steps, collapse = "\n")
-               })
-               
-               list(Table = stats %>% rename(ExpCond = SampleName) %>% mutate(Mean = Mean * 100), TableTest = resTTest, Plot = resplot)
              },
              "IF" = {
-               resultsNew = do.call(rbind,
-                                    lapply(1:length(results),
-                                           function(l){
-                                             d = results[[l]]$SubStatData
-                                             d$File = l
-                                             d
-                                           } 
-                                    ) 
+               resultsNew <- do.call(rbind,
+                                     lapply(1:length(results),
+                                            function(l){
+                                              d = results[[l]]$SubStatData
+                                              d$File = l
+                                              d
+                                            } 
+                                     ) 
                )
                
-               stats = resultsNew %>%
+               stats <- resultsNew %>%
                  group_by(ExpCond) %>% 
                  summarise(Mean = mean(Values), sd = sd(Values))
                
                res <- testStat.function(resultsNew[,c("ExpCond", "Values")])
                resTTest <- res$resTTest
+               resMainTest <- res$test
+               resPairwise <- res$pairwise
                steps <- res$steps
+               
+               main_test_pvalue <- if (!is.null(resMainTest)) resMainTest$pValue else NA
+               main_test_txt <- if (is.null(resPairwise)) {
+                 signif(main_test_pvalue, digits = 3) %>% paste0("P value from main test = ", .)
+               } else {
+                 ""
+               }
                
                resplot <- ggplot(stats, aes(x = ExpCond, y = Mean)) + 
                  geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
@@ -5140,37 +5086,46 @@ server <- function(input, output, session) {
                  geom_point(data = resultsNew, aes(x = ExpCond, y = Values, color = as.factor(File)),
                             position = position_jitter(width = 0.2), size = 3) +
                  theme_bw()+
-                 labs(color = "File")
-               
-               list(Table = stats, TableTest = resTTest, Plot = resplot)
+                 labs(title = "Results", subtitle = main_test_txt, color = "File") +
+                 annotate("text", x = Inf, y = Inf, label = "ns: p > 0.05\n*: p <= 0.05\n**: p <= 0.01\n ***: p <= 0.001", 
+                          hjust = 1.1, vjust = 1.5, size = 5, color = "black")
              },
              "PCR" = {
-               resultsNew = do.call(rbind,
-                                    lapply(1:length(results),
-                                           function(l){
-                                             d = results[[l]]$
-                                               d$File = l
-                                             d
-                                           } 
-                                    ) 
+               resultsNew <- do.call(rbind,
+                                     lapply(1:length(results),
+                                            function(l){
+                                              d = results[[l]]
+                                              d$File = l
+                                              d
+                                            } 
+                                     ) 
                )
                
-               resultsNew = resultsNew %>%  mutate(GeneH = paste(Gene, ", Housekeeping: ",HousekGene))
-               stats = resultsNew %>% group_by(GeneH) %>% summarise(Mean = mean(Q), sd = sd(Q))
+               resultsNew <- resultsNew %>% mutate(GeneH = paste(Gene, ", Housekeeping: ", HousekGene))
+               stats <- resultsNew %>% group_by(GeneH) %>% summarise(Mean = mean(Q), sd = sd(Q))
                
-               res <- testStat.function(resultsNew[,c("GeneH", "Q")])
+               res <- testStat.function(resultsNew[, c("GeneH", "Q")])
                resTTest <- res$resTTest
+               resMainTest <- res$test
+               resPairwise <- res$pairwise
                steps <- res$steps
+               
+               main_test_pvalue <- if (!is.null(resMainTest)) resMainTest$pValue else NA
+               main_test_txt <- if (is.null(resPairwise)) {
+                 signif(main_test_pvalue, digits = 3) %>% paste0("P value from main test = ", .)
+               } else {
+                 ""
+               }
                
                resplot <- ggplot(stats, aes(x = GeneH, y = Mean)) + 
                  geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
                  geom_errorbar(aes(ymin=Mean-sd, ymax=Mean+sd), width=.2, position=position_dodge(.9)) +
                  geom_point(data = resultsNew, aes(x = GeneH, y = Q, color = as.factor(File)),
                             position = position_jitter(width = 0.2), size = 3) +
-                 theme_bw()+
-                 labs(color = "File")
-               
-               list(Table = stats%>%rename(ExpCond=GeneH), TableTest = resTTest, Plot = resplot)
+                 theme_bw() +
+                 labs(title = "Results", subtitle = main_test_txt, y = "Q", x = "GeneH", color = "File") +
+                 annotate("text", x = Inf, y = Inf, label = "ns: p > 0.05\n*: p <= 0.05\n**: p <= 0.01\n ***: p <= 0.001", 
+                          hjust = 1.1, vjust = 1.5, size = 5, color = "black")
              },
              "FACS" = {
                resultsNew <- do.call(rbind,
@@ -5195,7 +5150,16 @@ server <- function(input, output, session) {
                })
                
                resTTest <- do.call(rbind, lapply(resList, function(res) res$resTTest))
+               resMainTest <- do.call(rbind, lapply(resList, function(res) res$test))
+               resPairwise <- do.call(rbind, lapply(resList, function(res) res$pairwise))
                steps <- unlist(lapply(resList, function(res) res$steps))
+               
+               main_test_pvalue <- if (!is.null(resMainTest)) resMainTest$pValue else NA
+               main_test_txt <- if (is.null(resPairwise)) {
+                 signif(main_test_pvalue, digits = 3) %>% paste0("P value from main test = ", .)
+               } else {
+                 ""
+               }
                
                resplot <- ggplot(stats, aes(x = ExpCondition, y = Mean)) + 
                  geom_bar(stat = "identity", color = "black", fill = "#BAE1FF", position = position_dodge()) +
@@ -5203,16 +5167,70 @@ server <- function(input, output, session) {
                  geom_point(data = resultsNew, aes(x = ExpCondition, y = Perc, color = as.factor(File)),
                             position = position_jitter(width = 0.2), size = 3) +
                  theme_bw() +
-                 labs(color = "File") +
-                 facet_wrap(~ Gate)
-               
-               list(Table = stats, TableTest = resTTest, Plot = resplot, Steps = steps)
+                 labs(title = "Results", subtitle = main_test_txt, color = "File") +
+                 facet_wrap(~ Gate) +
+                 annotate("text", x = Inf, y = Inf, label = "ns: p > 0.05\n*: p <= 0.05\n**: p <= 0.01\n ***: p <= 0.001", 
+                          hjust = 1.1, vjust = 1.5, size = 5, color = "black")
              }
       )
+      
+      if (!is.null(resPairwise) && main_test_pvalue < 0.05) {
+        resPairwise <- resPairwise %>%
+          separate(Condition, into = c("group1", "group2"), sep = " vs ") %>%
+          mutate(group1 = trimws(group1), 
+                 group2 = trimws(group2),
+                 stars = cut(pValue, breaks = c(-Inf, 0.001, 0.01, 0.05, Inf), labels = c("***", "**", "*", "ns")))
+        
+        all_combinations <- combn(unique(stats$SampleName), 2, simplify = FALSE)
+        
+        post_hoc_pairs <- lapply(all_combinations, function(pair) {
+          pair <- unlist(pair)
+          c(trimws(pair[1]), trimws(pair[2]))
+        })
+        
+        annotations <- sapply(post_hoc_pairs, function(pair) {
+          idx <- which((resPairwise$group1 == pair[1] & resPairwise$group2 == pair[2]) |
+                         (resPairwise$group1 == pair[2] & resPairwise$group2 == pair[1]))
+          if (length(idx) > 0) {
+            as.character(resPairwise$stars[idx])
+          } else {
+            "ns"
+          }
+        })
+        
+        y_max <- max(stats$Mean + stats$sd, na.rm = TRUE)
+        y_pos <- seq(y_max + 0.1, y_max + 0.1 + 0.1 * length(post_hoc_pairs), length.out = length(post_hoc_pairs))
+        
+        if (length(post_hoc_pairs) > 0 && length(annotations) > 0) {
+          resplot <- resplot + 
+            ggsignif::geom_signif(
+              comparisons = post_hoc_pairs,
+              y_position = y_pos,
+              annotations = annotations,
+              tip_length = 0.01,
+              textsize = 8 / 1.5,
+              vjust = 0.8
+            )
+        } else {
+          print("No valid post-hoc comparisons or annotations to plot.")
+        }
+      } else {
+        print("No pairwise comparisons to plot.")
+      }
+      
+      output$analysis_output <- renderUI({
+        steps_formatted <- gsub("Step", "<br><br>Step", steps)
+        steps_formatted <- gsub("Group", "<br>&nbsp;&nbsp;&nbsp;&nbsp;Group", steps_formatted)
+        HTML(steps_formatted)
+      })
+      
+      
+      return(list(Table = stats, TableTest = resTTest, Plot = resplot))
     } else {
-      list(Table = NULL,TableTest = NULL, Plot = NULL)
+      return(list(Table = NULL, TableTest = NULL, Plot = NULL))
     }
   })
+  
   
   # Render statistical analysis results
   output$TabStat <- renderDT({
