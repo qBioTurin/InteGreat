@@ -1545,134 +1545,13 @@ UploadRDs = function(Flag, session, output,
   }
 }
 
-# testStat.function = function(data, var = NULL) {
-#   steps <- c()  
-#   
-#   print("Contenuto della colonna prima della conversione:")
-#   print(data[, 2])
-#   
-#   # Pulizia dei dati: rimuove spazi bianchi e verifica di valori non numerici
-#   data[, 2] <- gsub("^\\s+|\\s+$", "", data[, 2])  # Rimuove spazi bianchi
-#   data[, 2] <- as.numeric(data[, 2])  # Converte a numerico
-#   
-#   # Shapiro-Wilk normality test
-#   shapiro_test = shapiro.test(data[, 2])
-#   steps <- c(steps, paste("Shapiro-Wilk test performed, p-value:", shapiro_test$p.value))
-#   
-#   if (shapiro_test$p.value > 0.05) {
-#     steps <- c(steps, "Data is normally distributed")
-#     
-#     vars = data[, 1] %>% distinct() %>% pull()
-#     if (length(vars) == 2) {
-#       steps <- c(steps, "Two groups, performing t-test")
-#       
-#       combo = combn(vars, 2)
-#       combo = data.frame(Var1 = combo[1, ], Var2 = combo[2, ])
-#       combo = combo[combo$Var1 != combo$Var2, ]
-#       
-#       resTTest = do.call(rbind,
-#                          lapply(1:dim(combo)[1], function(x) {
-#                            sn = combo[x, ]
-#                            ttest = t.test(data[data[, 1] == sn$Var1, 2],
-#                                           data[data[, 1] == sn$Var2, 2])
-#                            data.frame(Test = "t-test",
-#                                       Condition = paste(sn$Var1, " vs ", sn$Var2),
-#                                       pValue = ttest$p.value,
-#                                       conf.int = paste(ttest$conf.int, collapse = ";")
-#                            )
-#                          })
-#       )
-#       
-#       steps <- c(steps, "t-test completed")
-#     } else if (length(vars) > 2) {
-#       steps <- c(steps, "More than two groups, performing ANOVA")
-#       
-#       colnames(data) = c("SampleName", "Value")
-#       data$SampleName <- as.factor(data$SampleName)
-#       # Perform ANOVA
-#       anova_model = aov(Value ~ SampleName, data = data)
-#       summary(anova_model) -> a
-#       print(a)
-#       # Calculate group means and standard errors
-#       group_stats = data %>%
-#         group_by(SampleName) %>%
-#         summarize(
-#           mean = mean(Value),
-#           sd = sd(Value),
-#           n = n()
-#         )
-#       
-#       # Calculate standard error
-#       group_stats = group_stats %>%
-#         mutate(se = sd / sqrt(n))
-#       
-#       # Calculate critical value for 95% confidence interval
-#       alpha = 0.05
-#       t_critical = qt(1 - alpha/2, df = df.residual(anova_model))
-#       
-#       # Calculate confidence intervals
-#       group_stats = group_stats %>%
-#         mutate(
-#           ci_lower = mean - t_critical * se,
-#           ci_upper = mean + t_critical * se
-#         )
-#       
-#       # Display ANOVA results
-#       resTTest = data.frame(Test = "Anova",
-#                             Condition = paste(anova_model$call)[2],
-#                             pValue = a[[1]]$`Pr(>F)`[1],
-#                             conf.int = paste("-", collapse = ";"))
-#       
-#       steps <- c(steps, "ANOVA completed")
-#     } else {
-#       steps <- c(steps, "Invalid number of groups for t-test or ANOVA")
-#       resTTest = data.frame(Test = "Error", Condition = "Invalid number of groups", pValue = NA, conf.int = NA)
-#     }
-#     
-#     if (!is.null(var))
-#       resTTest$Var = var
-#     
-#     return(list(resTTest = resTTest, steps = steps))
-#   } else {
-#     steps <- c(steps, "Data is not normally distributed")
-#     
-#     vars = data[, 1] %>% distinct() %>% pull()
-#     if (length(vars) > 2) {
-#       steps <- c(steps, "More than two groups, performing Kruskal-Wallis test")
-#       
-#       # Perform Kruskal-Wallis test
-#       kruskal_test = kruskal.test(data[, 2] ~ data[, 1])
-#       resKruskal = data.frame(Test = "Kruskal-Wallis",
-#                               Condition = paste(kruskal_test$data.name),
-#                               pValue = kruskal_test$p.value,
-#                               conf.int = paste("-", collapse = ";"))
-#       steps <- c(steps, "Kruskal-Wallis test completed")
-#       return(list(resTTest = resKruskal, steps = steps))
-#     } else if (length(vars) == 2) {
-#       steps <- c(steps, "Two groups, performing Wilcoxon test")
-#       
-#       # Perform Wilcoxon test
-#       wilcox_test = wilcox.test(data[data[, 1] == vars[1], 2],
-#                                 data[data[, 1] == vars[2], 2])
-#       resWilcox = data.frame(Test = "Wilcoxon",
-#                              Condition = paste(vars[1], " vs ", vars[2]),
-#                              pValue = wilcox_test$p.value,
-#                              conf.int = paste("-", collapse = ";"))
-#       steps <- c(steps, "Wilcoxon test completed")
-#       return(list(resTTest = resWilcox, steps = steps))
-#     } else {
-#       steps <- c(steps, "Invalid number of groups")
-#       return(list(resTTest = data.frame(Test = "Error", Condition = "Invalid number of groups", pValue = NA, conf.int = NA), steps = steps))
-#     }
-#   }
-# }
-
 testStat.function <- function(data) {
   steps <- ""
   step_counter <- 1
   resTTest <- NULL
   resANOVA <- NULL
   resPairwise <- NULL
+  path <- c("shapiro.test")
   
   data$Value <- as.numeric(gsub("^\\s+|\\s+$", "", as.character(data[[2]])))
   
@@ -1709,12 +1588,14 @@ testStat.function <- function(data) {
   if (all(group_counts$count < 30) || all(shapiro_results$p.value > 0.05, na.rm = TRUE)) {
     steps <- c(steps, paste("Step ", step_counter, ". the data is normalized", "\n"))
     step_counter <- step_counter + 1 
+    path <- c(path, "groups check (data is normalized)")
     
     vars <- data[,1] %>% distinct() %>% pull() 
     
     if (length(vars) == 2) {
       steps <- c(steps, paste("Step ", step_counter, ". there are 2 groups, I will use t-test for analysis", "\n"))
       step_counter <- step_counter + 1  
+      path <- c(path, "t.test")
       combo <- combn(vars, 2)
       combo <- data.frame(Var1 = combo[1,], Var2 = combo[2,])
       
@@ -1734,6 +1615,7 @@ testStat.function <- function(data) {
     } else if(length(vars) > 2){
       steps <- c(steps, paste("Step ", step_counter, ". groups are more than 2, I will use ANOVA for analysis", "\n"))
       step_counter <- step_counter + 1  
+      path <- c(path, "ANOVA")
       colnames(data) <- c("SampleName", "Value")
       data$SampleName <- as.factor(data$SampleName)
       
@@ -1748,6 +1630,7 @@ testStat.function <- function(data) {
       if (resANOVA$pValue < 0.05) {
         steps <- c(steps, paste("Step ", step_counter, ". ANOVA p-value <", resANOVA$pValue, ", performing pairwise t-tests", "\n"))
         step_counter <- step_counter + 1  
+        path <- c(path, "pairwise t.test (ANOVA)")
         
         combo <- combn(vars, 2)
         combo <- data.frame(Var1 = combo[1,], Var2 = combo[2,])
@@ -1770,16 +1653,18 @@ testStat.function <- function(data) {
       }
     }
     
-    return(list(resTTest = resTTest, test = resANOVA, pairwise = resPairwise, steps = steps))
+    return(list(resTTest = resTTest, test = resANOVA, pairwise = resPairwise, steps = steps, path = path))
   } else {
     steps <- c(steps, paste("Step ", step_counter, ". the data is not normalized", "\n"))
     step_counter <- step_counter + 1 
+    path <- c(path, "groups check (data is not normalized)")
     
     vars <- data[,1] %>% distinct() %>% pull()
     
     if (length(vars) == 2) {
       steps <- c(steps, paste("Step ", step_counter, ". there are 2 groups, I will use Wilcoxon test for analysis", "\n"))
       step_counter <- step_counter + 1  
+      path <- c(path, "wilcoxon")
       combo <- combn(vars, 2)
       combo <- data.frame(Var1 = combo[1,], Var2 = combo[2,])
       
@@ -1799,19 +1684,21 @@ testStat.function <- function(data) {
     } else if(length(vars) > 2){
       steps <- c(steps, paste("Step ", step_counter, ". groups are more than 2, I will use Kruskal-Wallis for analysis", "\n"))
       step_counter <- step_counter + 1  
+      path <- c(path, "kruskal wallis")
       colnames(data) <- c("SampleName", "Value")
       data$SampleName <- as.factor(data$SampleName)
       
       kruskal_test <- kruskal.test(Value ~ SampleName, data = data)
       
       resKRUSKAL <- data.frame(Test = "Kruskal-Wallis",
-                             Condition = paste(kruskal_test$call)[2], 
-                             pValue = kruskal_test$p.value,
-                             conf.int = paste("-", collapse = ";"))
+                               Condition = paste(kruskal_test$call)[2], 
+                               pValue = kruskal_test$p.value,
+                               conf.int = paste("-", collapse = ";"))
       
       if (resKRUSKAL$pValue < 0.05) {
         steps <- c(steps, paste("Step ", step_counter, ". Kruskal-Wallis p-value <", resKRUSKAL$pValue, ", performing pairwise Wilcoxon tests", "\n"))
         step_counter <- step_counter + 1  
+        path <- c(path, "pairwise t.test (Kruskal)")
         
         combo <- combn(vars, 2)
         combo <- data.frame(Var1 = combo[1,], Var2 = combo[2,])
@@ -1834,6 +1721,6 @@ testStat.function <- function(data) {
       }
     }
     
-    return(list(resTTest = resTTest, test = resKRUSKAL, pairwise = resPairwise, steps = steps))
+    return(list(resTTest = resTTest, test = resKRUSKAL, pairwise = resPairwise, steps = steps, path = path))
   }
 }

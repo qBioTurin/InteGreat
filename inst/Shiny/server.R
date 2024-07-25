@@ -5015,6 +5015,7 @@ server <- function(input, output, session) {
       steps <- NULL
       resplot <- NULL
       stats <- NULL
+      path <- NULL
       
       switch(input$StatAnalysis, 
              "WB" = {
@@ -5034,6 +5035,7 @@ server <- function(input, output, session) {
                resMainTest <- res$test
                resPairwise <- res$pairwise
                steps <- res$steps
+               path <- res$path
                
                main_test_pvalue <- if (!is.null(resMainTest)) resMainTest$pValue else NA
                main_test_txt <- if (is.null(resPairwise)) {
@@ -5072,6 +5074,7 @@ server <- function(input, output, session) {
                resMainTest <- res$test
                resPairwise <- res$pairwise
                steps <- res$steps
+               path <- res$path
                
                main_test_pvalue <- if (!is.null(resMainTest)) resMainTest$pValue else NA
                main_test_txt <- if (is.null(resPairwise)) {
@@ -5109,6 +5112,7 @@ server <- function(input, output, session) {
                resMainTest <- res$test
                resPairwise <- res$pairwise
                steps <- res$steps
+               path <- res$path
                
                main_test_pvalue <- if (!is.null(resMainTest)) resMainTest$pValue else NA
                main_test_txt <- if (is.null(resPairwise)) {
@@ -5153,6 +5157,7 @@ server <- function(input, output, session) {
                resMainTest <- do.call(rbind, lapply(resList, function(res) res$test))
                resPairwise <- do.call(rbind, lapply(resList, function(res) res$pairwise))
                steps <- unlist(lapply(resList, function(res) res$steps))
+               paths <- lapply(resList, function(res) res$path)
                
                main_test_pvalue <- if (!is.null(resMainTest)) resMainTest$pValue else NA
                main_test_txt <- if (is.null(resPairwise)) {
@@ -5218,6 +5223,10 @@ server <- function(input, output, session) {
         print("No pairwise comparisons to plot.")
       }
       
+      output$decision_tree_plot <- renderPlot({
+        create_decision_tree(path)
+      })
+      
       output$analysis_output <- renderUI({
         steps_formatted <- gsub("Step", "<br><br>Step", steps)
         steps_formatted <- gsub("Group", "<br>&nbsp;&nbsp;&nbsp;&nbsp;Group", steps_formatted)
@@ -5231,13 +5240,12 @@ server <- function(input, output, session) {
   })
   
   
-  # Render statistical analysis results
   output$TabStat <- renderDT({
     StatisticalAnalysisResults()$Table
   },
   options = list(
     searching = FALSE,
-    dom = 't' # Only display the table
+    dom = 't' 
   )
   )
   
@@ -5250,77 +5258,45 @@ server <- function(input, output, session) {
   },
   options = list(
     searching = FALSE,
-    dom = 't' # Only display the table
+    dom = 't' 
   ))
   
-  create_decision_tree <- function() {
-    # Dati di esempio per l'albero decisionale
+  create_decision_tree <- function(path) {
     data <- tibble(
-      from = c("Start",
-               "Start", "Start",
-               "Decision A", "Decision A",
-               "Decision B", "Decision B",
-               "Decision C", "Decision C"),
-      to = c("Decision A", "Decision B", "Decision C",
-             "Outcome 1", "Outcome 2",
-             "Outcome 3", "Outcome 4",
-             "Outcome 5", "Outcome 6")
+      from = c("shapiro.test", "shapiro.test", 
+               "groups check (data is normalized)", "groups check (data is normalized)",
+               "groups check (data is not normalized)", "groups check (data is not normalized)",
+               "ANOVA", "kruskal wallis"),
+      to = c("groups check (data is normalized)", "groups check (data is not normalized)", 
+             "t.test", "ANOVA", 
+             "wilcoxon", "kruskal wallis",
+             "pairwise t.test (ANOVA)", "pairwise t.test (Kruskal)"),
+      edge_label = c("data is normalized", "data is not normalized",
+                     "number of groups = 2", "number of groups > 2",
+                     "number of groups = 2", "number of groups > 2",
+                     "anova result < 0.05", "kruskal wallis result < 0.05")
     )
     
-    # Creare il grafo con igraph
     graph <- graph_from_data_frame(data)
     
-    # Ottenere le posizioni dei nodi
-    layout <- layout_as_tree(graph)
-    layout <- as.data.frame(layout)
-    colnames(layout) <- c("x", "y")
-    layout$name <- V(graph)$name
-    
-    # Preparare i dati per geom_rect
-    rect_data <- layout %>%
-      mutate(xmin = x - 0.25, xmax = x + 0.25,
-             ymin = y - 0.25, ymax = y + 0.25,
-             fill = ifelse(name %in% c("Start", "Decision A", "Outcome 1"), "green", "grey"))
-    
-    # Ottenere i dati degli archi
-    edges <- get.data.frame(graph, what = "edges")
-    colnames(edges) <- c("from", "to")
-    
-    # Unire gli archi con il layout per ottenere le coordinate per il tracciamento
-    edges <- edges %>%
-      left_join(layout, by = c("from" = "name")) %>%
-      rename(x_from = x, y_from = y) %>%
-      left_join(layout, by = c("to" = "name")) %>%
-      rename(x_to = x, y_to = y)
-    
-    # Calcolare le coordinate delle frecce ai bordi dei rettangoli
-    edges <- edges %>%
-      rowwise() %>%
-      mutate(
-        angle = atan2(y_to - y_from, x_to - x_from),
-        x_from_edge = x_from + 0.25 * cos(angle),
-        y_from_edge = y_from + 0.25 * sin(angle),
-        x_to_edge = x_to - 0.25 * cos(angle),
-        y_to_edge = y_to - 0.25 * sin(angle)
-      )
-    
-    # Plotting the tree
-    p <- ggplot() +
-      geom_rect(data = rect_data, mapping = aes(xmin = xmin, ymin = ymin, xmax = xmax, ymax = ymax, fill = fill), alpha = 0.5, color = "black") +
-      geom_text(data = layout, mapping = aes(x = x, y = y, label = name), size = 5) +
-      geom_segment(data = edges, aes(x = x_from_edge, y = y_from_edge, xend = x_to_edge, yend = y_to_edge), arrow = arrow(length = unit(4, 'mm'))) + 
+    p <- ggraph(graph, layout = 'tree') + 
+      geom_edge_link(aes(label = edge_label), 
+                     angle_calc = 'along', 
+                     label_dodge = unit(5, 'mm'), 
+                     label_size = 3.5, 
+                     arrow = arrow(length = unit(4, 'mm'))) +
+      geom_node_label(aes(label = name, fill = ifelse(name %in% path, "green", "grey")), 
+                      size = 4, 
+                      color = "black", 
+                      label.padding = unit(0.4, "lines"),
+                      label.r = unit(0.15, "lines")) +
       scale_fill_manual(values = c("green" = "green", "grey" = "grey")) +
       theme_void() +
-      theme(legend.position = "none") # Rimuove la leggenda
+      theme(legend.position = "none", 
+            plot.margin = margin(10, 10, 10, 50)) 
     
     return(p)
   }
-  
-  # Output del grafico
-  output$decision_tree_plot <- renderPlot({
-    create_decision_tree()
-  })
-  
   
   ### End Statistic ####
   
