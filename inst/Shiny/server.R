@@ -5179,7 +5179,7 @@ server <- function(input, output, session) {
              }
       )
       
-      if (!is.null(resPairwise) && main_test_pvalue < 0.05) {
+      if (!is.null(resPairwise) && !is.null(main_test_pvalue) && main_test_pvalue < 0.05) {
         resPairwise <- resPairwise %>%
           separate(Condition, into = c("group1", "group2"), sep = " vs ") %>%
           mutate(group1 = trimws(group1), 
@@ -5264,13 +5264,13 @@ server <- function(input, output, session) {
   create_decision_tree <- function(path) {
     data <- tibble(
       from = c("shapiro.test", "shapiro.test", 
-               "groups check (data is normalized)", "groups check (data is normalized)",
-               "groups check (data is not normalized)", "groups check (data is not normalized)",
+               "groups check (normalized)", "groups check (normalized)",
+               "groups check (not normalized)", "groups check (not normalized)",
                "ANOVA", "kruskal wallis"),
-      to = c("groups check (data is normalized)", "groups check (data is not normalized)", 
+      to = c("groups check (normalized)", "groups check (not normalized)", 
              "t.test", "ANOVA", 
              "wilcoxon", "kruskal wallis",
-             "pairwise t.test (ANOVA)", "pairwise t.test (Kruskal)"),
+             "pairwise test\nANOVA", "pairwise test\nKruskal"),
       edge_label = c("data is normalized", "data is not normalized",
                      "number of groups = 2", "number of groups > 2",
                      "number of groups = 2", "number of groups > 2",
@@ -5292,9 +5292,7 @@ server <- function(input, output, session) {
                       label.r = unit(0.15, "lines")) +
       scale_fill_manual(values = c("green" = "green", "grey" = "grey")) +
       theme_void() +
-      theme(legend.position = "none", 
-            plot.margin = margin(10, 10, 10, 50)) 
-    
+      theme(legend.position = "none")
     return(p)
   }
   

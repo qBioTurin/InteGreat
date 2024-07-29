@@ -1590,12 +1590,12 @@ ui <- dashboardPage(
                 box(
                   width = 12,
                   collapsible = TRUE,
-                  collapsed = FALSE,
+                  collapsed = TRUE,
                   title = "Statistical decision",
                   fluidRow(
                     column(9,
                            style = "border-right: 1px solid #000000;",
-                           plotOutput("decision_tree_plot") # Aggiunge il plot qui
+                           plotOutput("decision_tree_plot")
                     ),
                     column(3,
                            tags$style(HTML("#analysis_output {font-size: 12px; font-style: italic; }")),

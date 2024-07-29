@@ -1588,7 +1588,7 @@ testStat.function <- function(data) {
   if (all(group_counts$count < 30) || all(shapiro_results$p.value > 0.05, na.rm = TRUE)) {
     steps <- c(steps, paste("Step ", step_counter, ". the data is normalized", "\n"))
     step_counter <- step_counter + 1 
-    path <- c(path, "groups check (data is normalized)")
+    path <- c(path, "groups check (normalized)")
     
     vars <- data[,1] %>% distinct() %>% pull() 
     
@@ -1627,10 +1627,10 @@ testStat.function <- function(data) {
                              pValue = a[[1]]$`Pr(>F)`[1],
                              conf.int = paste("-", collapse = ";"))
       
-      if (resANOVA$pValue < 0.05) {
+      if (!is.null(resANOVA) && resANOVA$pValue < 0.05) {
         steps <- c(steps, paste("Step ", step_counter, ". ANOVA p-value <", resANOVA$pValue, ", performing pairwise t-tests", "\n"))
         step_counter <- step_counter + 1  
-        path <- c(path, "pairwise t.test (ANOVA)")
+        path <- c(path, "pairwise test\nANOVA")
         
         combo <- combn(vars, 2)
         combo <- data.frame(Var1 = combo[1,], Var2 = combo[2,])
@@ -1657,7 +1657,7 @@ testStat.function <- function(data) {
   } else {
     steps <- c(steps, paste("Step ", step_counter, ". the data is not normalized", "\n"))
     step_counter <- step_counter + 1 
-    path <- c(path, "groups check (data is not normalized)")
+    path <- c(path, "groups check (not normalized)")
     
     vars <- data[,1] %>% distinct() %>% pull()
     
@@ -1695,10 +1695,10 @@ testStat.function <- function(data) {
                                pValue = kruskal_test$p.value,
                                conf.int = paste("-", collapse = ";"))
       
-      if (resKRUSKAL$pValue < 0.05) {
+      if (!is.null(resKRUSKAL) && resKRUSKAL$pValue < 0.05) {
         steps <- c(steps, paste("Step ", step_counter, ". Kruskal-Wallis p-value <", resKRUSKAL$pValue, ", performing pairwise Wilcoxon tests", "\n"))
         step_counter <- step_counter + 1  
-        path <- c(path, "pairwise t.test (Kruskal)")
+        path <- c(path, "pairwise test\nKruskal")
         
         combo <- combn(vars, 2)
         combo <- data.frame(Var1 = combo[1,], Var2 = combo[2,])
