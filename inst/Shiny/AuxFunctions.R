@@ -885,7 +885,7 @@ get_formatted_data <- function(colors, color_names, result, singleValue, analysi
   column_TIME <- paste0(analysis, "cell_TIME")  
   
   # Set variable names based on analysis type
-  if (analysis %in% c("ELISA","BCA","IF") ){
+  if (analysis %in% c("ELISA","BCA","IF", "CYTOTOX") ){
     value1 = "Sample Name"
     value2 = "Experimental condition"
     column_EXP <- paste0(analysis, "cell_SN") 
@@ -907,6 +907,8 @@ get_formatted_data <- function(colors, color_names, result, singleValue, analysi
       time_values <- apply(matching_indices, 1, function(idx) {
         if (analysis == "ELISA")
           val <- result$ELISAcell_EXP[idx["row"], idx["col"]]
+        else if (analysis == "CYTOTOX") 
+          val <- result$CYTOTOXcell_EXP[idx["row"], idx["col"]]
         else if (analysis == "IF")
           val <- result$IFcell_EXP[idx["row"], idx["col"]]
         else if (analysis == "BCA")
@@ -915,6 +917,13 @@ get_formatted_data <- function(colors, color_names, result, singleValue, analysi
         
         if (!is.na(val) && !is.null(val) && val != "") val else ""
       })
+      
+      if (analysis == "CYTOTOX") {
+        rep_values <- apply(matching_indices, 1, function(idx) {
+          val <- result$CYTOTOXcell_REP[idx["row"], idx["col"]]
+          if (!is.na(val) && !is.null(val) && val != "") val else ""
+        })
+      }
       
       time_output <- paste(unlist(time_values), collapse = " - ")
       
