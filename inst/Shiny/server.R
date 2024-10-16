@@ -1221,7 +1221,7 @@ server <- function(input, output, session) {
       
       SubDataStat = SubData %>% group_by(ExpCond) %>% summarise(Mean = mean(Values), sd = sd(Values))
       
-      resTTest = testStat.function(SubData, varSel)
+      resTTest = testStat.function(SubData)
       
       resplot <- ggplot(SubDataStat, aes(x = ExpCond, y = Mean)) + 
         geom_bar(stat="identity", color="black", fill = "#BAE1FF", position=position_dodge()) +
@@ -1245,7 +1245,7 @@ server <- function(input, output, session) {
       })
       
       output$IFtable_ttest = renderDT({
-        DT::datatable(resTTest,
+        DT::datatable(resTTest$resTTest,
                       selection = 'none',
                       rownames= FALSE,
                       options = list(scrollX = TRUE,
@@ -3984,7 +3984,6 @@ server <- function(input, output, session) {
   
   observe({
     if (!is.null(cytotoxResult$CYTOTOXcell_EXP)) {
-      print("Esecuzione dell'osservatore per left_data_cytotox")
       color_codes <- FlagsCYTOTOX$EXPcol
       color_names <- names(FlagsCYTOTOX$EXPcol)
       
@@ -3996,13 +3995,9 @@ server <- function(input, output, session) {
       left_colors <- color_codes[1:length(color_codes)]
       
       left_formatted_data <- get_formatted_data(left_colors, color_names[1:length(color_codes)], cytotoxResult, cytotoxResult$CYTOTOXcell_EXP, "CYTOTOX")
-      print("Dati formattati per la tabella sinistra:")
-      print(left_formatted_data)
       
       left_data_cytotox(left_formatted_data)
-    } else {
-      print("Dati non inizializzati correttamente.")
-    }
+    } 
     
     output$leftTableCytotox <- renderDataTable({
       data <- left_data_cytotox()
